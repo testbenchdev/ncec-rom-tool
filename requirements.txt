@@ -1,0 +1,14 @@
+# NCEC ROM Map Editor — 依存パッケージ
+# GUI の tkinter は Python 標準ライブラリ(別途インストール不要)。
+
+# CAN 通信(ライブ/吸い出し/書き込み)
+python-can>=4.0
+gs_usb
+pyusb
+
+# ROM 逆アセンブル補助ツール(tools/shdis.py 等)
+capstone
+
+# 取説PDF生成・ヒートマップ描画(tools/gen_manual.py, ダッシュボード)
+PyMuPDF
+Pillow
