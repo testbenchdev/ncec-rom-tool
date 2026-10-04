@@ -1,0 +1,41 @@
+# === 絶対にコミットしないもの(著作権・個人データ) ===
+# ECU ファームウェア/ROMイメージ(マツダの著作物)
+*.bin
+ncec_rom_dump.bin
+# ECU書き込みに必要な SBL / 非公開IP(持っていても公開しない)
+*_sbl.bin
+sbl*.bin
+# サードパーティ製マニュアル(ルネサス等の著作物)
+docs/sh7058_plain_manual.pdf
+REN_*.pdf
+# 他ツールの配布物
+nc-flash-*.zip
+mx5studio*
+
+# 第三者のマップ定義(ライセンスの都合で同梱しない。READMEの手順で各自入手)
+defs/libretuner/
+defs/*.xml
+
+# ルート直下の生成PDF重複(正本は docs/ 側)
+/github_publish_guide.pdf
+/map_editor_manual.pdf
+
+# === ログ・キャプチャ・個人設定 ===
+logs/
+*.raw
+candump*.raw
+dashboard_layout.json
+
+# === 生成物(任意。配布したければ除外から外す) ===
+docs/_manual_img/
+
+# === Python ===
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+build/
+dist/
+*.egg-info/
