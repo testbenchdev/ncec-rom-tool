@@ -1,7 +1,9 @@
 # CAN書き込み — 準備完了状態と残作業(SBL入手のみ)
 
-更新: 2026-10-03。対象: 予備ECU(Denso NC / SH7058 / CALID LFG7EG / **世代 NC1**)。
+更新: 2026-10-09。対象: 予備ECU(Denso NC / SH7058 / CALID LFG7EG / **世代 NC1**)。
 nc-flash 2.20.0 のソース解析と本個体の実機確認に基づき、**SBL以外はすべて実装・検証済み**。
+SBL入手は「**①自前キャプチャ**」ルートに注力中(他人のSBL配布に依存しない)。`tools/extract_sbl.py` は
+実戦フォーマット対応・破損検知まで強化済み(2026-10-09)。
 
 ## 確定したフラッシュ手順(ncecu/flash.py `Flasher.flash`)
 ```
@@ -27,18 +29,31 @@ nc-flash 2.20.0 のソース解析と本個体の実機確認に基づき、**SB
 
 ## 残る唯一の入力 = SBL(0x1800バイト)
 - 必要なのは **NC1 / flash_start=0x2000 の SBL 1個**(CALID非依存=どのNC1車でも同じ)。
-- 入手: **NC1車のフル書き込みを candump 記録** → `tools/extract_sbl.py` で抽出。
-  (SBLはフラッシュ中に 0x36 で平文送信される。入手源は2006–2008頃のNC全般)
+- SBLはフラッシュ中に 0x36 で**平文送信**されるので、**フル書き込みを1回キャプチャ**すれば抽出できる。
+- **①自前キャプチャ(推奨・他人に依存しない)**: SBLを内蔵する既存ツールで予備ECUを**1回だけ**
+  フル書き込み(**同一内容の無害な再書込みでも可**)しつつ CAN を記録する。
+  入手源ツール例: nc-flash の**配布バイナリ**(ソースはSBLを隠すが実行形式は内蔵)/ mx5studio /
+  EcuFlash + SHリフラッシュkernel。どれか1つを動かせる環境があれば完結する。
+- ②他人のNC1フル書き込みキャプチャ(candump)を貰う、でも可(世代共通なので流用できる)。
 
 ## 手順:SBL入手〜書き戻しテスト
-1. **キャプチャ**(誰かのNC1実機フラッシュ): RomDrop なら「S｜Sniff CAN」で candump.raw、
-   または SocketCAN で `candump -l can0`(500kbps)。フラッシュ全体を記録。
+1. **キャプチャ**(NC1のフルフラッシュを1回・500kbps CAN): SBL内蔵ツール(nc-flash配布バイナリ /
+   mx5studio / EcuFlash+kernel)で予備ECUを**フル書き込み**しつつ、以下のいずれかで記録。
+   **full-flash(flash_start=0x2000)にすること**(部分/動的書込みのキャプチャはSBLが別物で使えない)。
+   - SocketCAN: `candump -l can0`(`-L`ログ)/ 既定出力 / `ID#DATA` テキスト
+   - Vector・SavvyCAN: `.asc`(Rx/Tx両対応)/ `.csv`(SavvyCAN/GVRET)
+   - RomDrop「S｜Sniff CAN」などの生バイナリ `candump.raw`
+   - → `tools/extract_sbl.py` がこれらを**自動判定**(生バイナリで外す場合は `--inspect` で診断、
+     `--bin-record-len/--bin-id-off/--bin-data-off` で手動指定)。
 2. **抽出**:
    ```bash
    python tools/extract_sbl.py <capture> --out-dir out
    ```
-   → `out/sbl.bin`(0x1800)。ツールが **dl_size=0xFF800 / capture_generation=NC1** を自動確認
-   (警告が出たら full-flash か NC1 か要確認=そのSBLは使わない)。
+   → `out/sbl.bin`(0x1800)。ツールが **dl_addr=0x8000 / dl_size=0xFF800 / block=0x400 /
+   capture_generation=NC1** を自動検証。さらに **ISO-TP連結フレームの欠落・順序乱れ**を検知する。
+   - **警告ゼロ(終了コード0)= そのまま次へ**。
+   - **警告あり(終了コード2)= 使わない**。`★致命`(SN不整合/未完)はフレーム欠落で**SBL破損**=
+     ブリック要因なので、**full-flash / NC1 / 無欠落**で**再キャプチャ**する(壊れたSBLは絶対に流さない)。
 3. **ドライラン**(ECUに接続・書き込まない):
    ```bash
    python tools/flash_writeback.py --sbl out/sbl.bin
