@@ -10,12 +10,20 @@ class IsoTpError(Exception):
 
 class IsoTp:
     def __init__(self, bus: can.BusABC, tx_id: int = 0x7E0, rx_id: int = 0x7E8,
-                 pad: int = 0x00, timeout: float = 1.0):
+                 pad: int = 0x00, timeout: float = 1.0,
+                 rx_block_size: int = 0x10, rx_st_min: int = 0x00):
         self.bus = bus
         self.tx_id = tx_id
         self.rx_id = rx_id
         self.pad = pad
         self.timeout = timeout
+        # 受信時に送るフロー制御(FC)のパラメータ。
+        # rx_block_size: ECU が一度に送る連続フレーム数(0=無制限)。大きい応答(Mode23の
+        #   0x400B=約146CF)で BS=0 にするとホストの受信バッファが溢れて取りこぼし→
+        #   "sequence number mismatch" になるため、既定で 0x10 ごとに FC を返してペーシングする。
+        # rx_st_min: 連続フレームの最小間隔(0x00-0x7F=ms, 0xF1-0xF9=100-900us)。
+        self.rx_block_size = rx_block_size
+        self.rx_st_min = rx_st_min
 
     # ---- 低レベル ----
     def _send_frame(self, data: bytes) -> None:
@@ -87,9 +95,12 @@ class IsoTp:
             raise IsoTpError(f"unexpected frame {fr.hex(' ')}")
         n = ((fr[0] & 0x0F) << 8) | fr[1]
         data = bytearray(fr[2:8])
-        # Flow Control: CTS, BS=0（全部送れ）, STmin=0
-        self._send_frame(bytes([0x30, 0x00, 0x00]))
+        bs = self.rx_block_size & 0xFF
+        stmin = self.rx_st_min & 0xFF
+        # Flow Control: CTS。BS ごとに FC を返してペーシング(受信バッファ溢れ=取りこぼし防止)
+        self._send_frame(bytes([0x30, bs, stmin]))
         expect_sn = 1
+        in_block = 0
         while len(data) < n:
             cf = self._recv_frame(self.timeout)
             if cf is None:
@@ -100,4 +111,9 @@ class IsoTp:
                 raise IsoTpError("sequence number mismatch")
             data += cf[1:8]
             expect_sn = (expect_sn + 1) & 0x0F
+            in_block += 1
+            # このブロック分を受け切ったら、まだ続きがある限り次の FC(CTS)を送る
+            if bs and in_block >= bs and len(data) < n:
+                self._send_frame(bytes([0x30, bs, stmin]))
+                in_block = 0
         return bytes(data[:n])

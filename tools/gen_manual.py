@@ -3,9 +3,11 @@
 ROM(実値)と LibreTuner 定義を読み、概要 / 使用方法 / 各マップの詳細(ヒートマップ画像+
 意味・調整・注意)を PDF 出力する。改変があれば本スクリプトを再実行すれば最新版に更新される。
 
-出力: docs/map_editor_manual.pdf
+出力: docs/map_editor_manual.pdf(日本語) / docs/map_editor_manual_EN.pdf(英語)
 依存: PyMuPDF(pymupdf), Pillow(PIL) のみ。
-使い方: python tools/gen_manual.py
+使い方:
+  python tools/gen_manual.py            # 日本語版(既定)
+  python tools/gen_manual.py --lang en  # 英語版(_EN サフィックス)
 """
 from __future__ import annotations
 
@@ -23,10 +25,36 @@ sys.path.insert(0, str(ROOT))
 from ncecu import ltdef, i18n, flash as flashmod  # noqa: E402
 from ncecu.rom import Rom  # noqa: E402
 
+def _parse_lang(argv):
+    """コマンドライン引数から言語を決める。既定は日本語。
+    例: `python tools/gen_manual.py --lang en` / `... en` で英語版。"""
+    toks = [a.lower() for a in argv[1:]]
+    for i, a in enumerate(toks):
+        if a in ("en", "english", "--en", "-en"):
+            return "en"
+        if a in ("ja", "jp", "japanese", "--ja", "-ja"):
+            return "ja"
+        if a in ("--lang", "-l", "--language") and i + 1 < len(toks):
+            return "en" if toks[i + 1] in ("en", "english") else "ja"
+        if a.startswith("--lang="):
+            return "en" if a.split("=", 1)[1] in ("en", "english") else "ja"
+    return "ja"
+
+
+LANG = _parse_lang(sys.argv)
+i18n.set_language(LANG)
+
+
+def L(ja, en):
+    """アクティブな LANG に応じて日本語/英語の文字列を選ぶ。"""
+    return en if LANG == "en" else ja
+
+
 ROM_PATH = ROOT / "ncec_rom_dump.bin"
 MAIN_JSON = ROOT / "defs" / "libretuner" / "main.json"
 CALID_JSON = ROOT / "defs" / "libretuner" / "LFG7EG.json"
-OUT_PDF = ROOT / "docs" / "map_editor_manual.pdf"
+OUT_PDF = ROOT / "docs" / ("map_editor_manual_EN.pdf" if LANG == "en"
+                           else "map_editor_manual.pdf")
 TMP = ROOT / "docs" / "_manual_img"
 NOTES_PATH = ROOT / "docs" / "map_notes.json"   # 質問から蓄積した解説(§6)
 
@@ -237,63 +265,118 @@ def f32(data, off):
 KEY_MAPS = [
     {"kind": "find", "match": lambda t: t.category.startswith("Spark Base") and t.ttype == "3D"
      and "High Fuel Request" in t.name and "Transition" not in t.name,
-     "title": "点火ベース(基本進角) Spark Base",
-     "what": "回転数×負荷に対する基本点火時期(進角)。エンジンのトルク・燃費・ノック耐性を"
-             "決める最重要マップ。高負荷ほど進角を控えめ、低〜中負荷で進角を稼ぐのが一般形。",
-     "adjust": "値↑(進角)=トルク/燃費向上だがノックのリスク増。値↓(遅角)=安全側だが出力低下。"
-               "高負荷・低回転の領域ほどノックしやすいので、上げるなら1〜2°ずつ・ノック監視下で。",
-     "caution": "ハイオク前提の値をレギュラーで使うとノック→エンジン損傷。純正+2°を超える変更は"
-                "必ず実走ノックログ(またはノックセンサ監視)とセットで。"},
+     "title": L("点火ベース(基本進角) Spark Base", "Spark Base (Base Ignition Advance)"),
+     "what": L("回転数×負荷に対する基本点火時期(進角)。エンジンのトルク・燃費・ノック耐性を"
+               "決める最重要マップ。高負荷ほど進角を控えめ、低〜中負荷で進角を稼ぐのが一般形。",
+               "Base ignition timing (advance) versus RPM x load. The single most important map "
+               "for torque, fuel economy and knock margin. The usual shape pulls advance back at "
+               "high load and builds it up in the low-to-mid load range."),
+     "adjust": L("値↑(進角)=トルク/燃費向上だがノックのリスク増。値↓(遅角)=安全側だが出力低下。"
+                 "高負荷・低回転の領域ほどノックしやすいので、上げるなら1〜2°ずつ・ノック監視下で。",
+                 "Higher (more advance) = more torque / economy but higher knock risk. Lower "
+                 "(retard) = safer but less power. The high-load / low-RPM corner knocks most "
+                 "easily, so raise it only 1-2 deg at a time while monitoring for knock."),
+     "caution": L("ハイオク前提の値をレギュラーで使うとノック→エンジン損傷。純正+2°を超える変更は"
+                  "必ず実走ノックログ(またはノックセンサ監視)とセットで。",
+                  "Running premium-fuel values on regular fuel causes knock and engine damage. "
+                  "Any change beyond stock +2 deg must be paired with a road knock log (or live "
+                  "knock-sensor monitoring).")},
     {"kind": "find", "match": lambda t: t.category.startswith("Ignition Coil Dwell") and t.ttype == "3D",
-     "title": "点火コイル ドウェル時間 Dwell",
-     "what": "点火コイルの通電(充電)時間[ms]。回転数×電圧で、必要な火花エネルギーを得る時間を規定。",
-     "adjust": "コイル交換(社外・GDIコイル等)時に合わせる。短すぎると高回転・高負荷で失火、"
-               "長すぎるとコイル発熱・寿命低下。純正コイルなら基本変更不要。",
-     "caution": "むやみに全体を延ばさない(発熱でコイル故障)。変更はコイルメーカー推奨値を基準に。"},
+     "title": L("点火コイル ドウェル時間 Dwell", "Ignition Coil Dwell Time"),
+     "what": L("点火コイルの通電(充電)時間[ms]。回転数×電圧で、必要な火花エネルギーを得る時間を規定。",
+               "Coil charge (dwell) time in ms. Versus RPM x voltage it sets the time needed to "
+               "build the required spark energy."),
+     "adjust": L("コイル交換(社外・GDIコイル等)時に合わせる。短すぎると高回転・高負荷で失火、"
+                 "長すぎるとコイル発熱・寿命低下。純正コイルなら基本変更不要。",
+                 "Tune this when changing coils (aftermarket, GDI coils, etc.). Too short causes "
+                 "misfire at high RPM / high load; too long overheats the coil and shortens its "
+                 "life. With stock coils it generally needs no change."),
+     "caution": L("むやみに全体を延ばさない(発熱でコイル故障)。変更はコイルメーカー推奨値を基準に。",
+                  "Do not blindly extend dwell across the board (overheating destroys the coil). "
+                  "Base any change on the coil maker's recommended values.")},
     {"kind": "find", "match": lambda t: t.category.startswith("Fuel Target OL") and t.ttype == "3D",
-     "title": "目標空燃比 開ループ Fuel Target OL",
-     "what": "高負荷(開ループ)時の目標空燃比(λ/AFR)。全開加速時など、O2フィードバックを離れて"
-             "この目標で燃調する領域。",
-     "adjust": "リッチ=燃焼温度低下で安全・出力寄り(パワーAFRは概ねλ0.85〜0.88)。リーン=燃費だが"
-               "高負荷では危険。高負荷域はリッチ側に余裕を持たせるのが安全。",
-     "caution": "高負荷でのリーンは即ノック/溶損リスク。薄くする変更は最小限+実測(ワイドバンドAFR)で確認。"},
+     "title": L("目標空燃比 開ループ Fuel Target OL", "Target AFR, Open Loop (Fuel Target OL)"),
+     "what": L("高負荷(開ループ)時の目標空燃比(λ/AFR)。全開加速時など、O2フィードバックを離れて"
+               "この目標で燃調する領域。",
+               "Target air-fuel ratio (lambda / AFR) at high load (open loop). In regions such as "
+               "full-throttle acceleration the ECU leaves O2 feedback and fuels to this target."),
+     "adjust": L("リッチ=燃焼温度低下で安全・出力寄り(パワーAFRは概ねλ0.85〜0.88)。リーン=燃費だが"
+                 "高負荷では危険。高負荷域はリッチ側に余裕を持たせるのが安全。",
+                 "Richer = lower combustion temperature, safer and power-oriented (power AFR is "
+                 "roughly lambda 0.85-0.88). Leaner = economy but dangerous at high load. Keeping "
+                 "the high-load region on the rich side is the safe choice."),
+     "caution": L("高負荷でのリーンは即ノック/溶損リスク。薄くする変更は最小限+実測(ワイドバンドAFR)で確認。",
+                  "A lean mixture at high load risks immediate knock / melted pistons. Keep any "
+                  "leaning minimal and verify it with a measured wideband AFR.")},
     {"kind": "find", "match": lambda t: t.name.startswith("Fuel Target CL - Base") and t.ttype == "3D",
-     "title": "目標空燃比 閉ループ Fuel Target CL",
-     "what": "閉ループ時の目標空燃比(通常ストイキ=λ1付近)。O2センサでこの目標に追従する。",
-     "adjust": "基本は変更不要。触媒保護・排ガスの要なので、ストイキから外す理由がなければ触らない。",
-     "caution": "λ1から外すと排ガス悪化・触媒劣化・チェックランプ。原則据え置き。"},
+     "title": L("目標空燃比 閉ループ Fuel Target CL", "Target AFR, Closed Loop (Fuel Target CL)"),
+     "what": L("閉ループ時の目標空燃比(通常ストイキ=λ1付近)。O2センサでこの目標に追従する。",
+               "Target air-fuel ratio in closed loop (normally stoichiometric, near lambda 1). "
+               "The O2 sensor keeps the mixture on this target."),
+     "adjust": L("基本は変更不要。触媒保護・排ガスの要なので、ストイキから外す理由がなければ触らない。",
+                 "Normally needs no change. It is central to catalyst protection and emissions, so "
+                 "leave it alone unless you have a specific reason to move off stoichiometric."),
+     "caution": L("λ1から外すと排ガス悪化・触媒劣化・チェックランプ。原則据え置き。",
+                  "Moving away from lambda 1 worsens emissions, degrades the catalyst and can "
+                  "trigger the check-engine light. Leave it as-is as a rule.")},
     {"kind": "find", "match": lambda t: t.category.startswith("Variable Cam Timing")
      and t.ttype == "3D" and "DO NOT MODIFY" not in t.category,
-     "title": "可変バルブタイミング VVT",
-     "what": "回転数×負荷に対する吸気(排気)カムの目標進角。トルクの出方(低速寄り/高速寄り)や"
-             "充填効率・内部EGRに影響。",
-     "adjust": "中回転トルクを狙って進角、などで特性を調整できる。効果は体感しやすいが最適点は要実測。",
-     "caution": "過度な進角はバルブ挙動・ノック・アイドル不安定の原因。小刻みに。'DO NOT MODIFY'系は触らない。"},
+     "title": L("可変バルブタイミング VVT", "Variable Valve Timing (VVT)"),
+     "what": L("回転数×負荷に対する吸気(排気)カムの目標進角。トルクの出方(低速寄り/高速寄り)や"
+               "充填効率・内部EGRに影響。",
+               "Target intake (or exhaust) cam advance versus RPM x load. It shapes where torque "
+               "appears (low-end vs top-end) and affects volumetric efficiency and internal EGR."),
+     "adjust": L("中回転トルクを狙って進角、などで特性を調整できる。効果は体感しやすいが最適点は要実測。",
+                 "You can shape the character, e.g. adding advance to target mid-range torque. The "
+                 "effect is easy to feel, but the optimum must be found by measurement."),
+     "caution": L("過度な進角はバルブ挙動・ノック・アイドル不安定の原因。小刻みに。'DO NOT MODIFY'系は触らない。",
+                  "Excessive advance causes valve-train problems, knock and unstable idle. Move in "
+                  "small steps. Do not touch the 'DO NOT MODIFY' tables.")},
     {"kind": "find", "match": lambda t: t.category.startswith("Fuel IPW - Base") and t.ttype == "3D",
-     "title": "燃料噴射パルス幅 ベース Fuel IPW Base",
-     "what": "インジェクタの基本噴射時間。空気量に対する燃料量の基礎で、空燃比に直結。",
-     "adjust": "インジェクタ交換時はここと『オフセット/スケーリング』で容量・デッドタイムを合わせる。"
-               "値↑=リッチ/値↓=リーン。",
-     "caution": "インジェクタ特性を無視した変更は低開度で大きくズレる。交換時は必ず対応データで。"},
-    {"kind": "scalars", "title": "回転リミッタ(レブリミット) Rev Limit",
-     "what": "回転数の上限保護。条件別に『燃料カット』と『スロットルカット』がある。",
-     "adjust": "値を上げると許容回転が上がる。上げる場合はバルブ・駆動系の許容回転を必ず確認。",
-     "caution": "機械的限界を超える設定はエンジン破損に直結。むやみに上げない。",
+     "title": L("燃料噴射パルス幅 ベース Fuel IPW Base", "Fuel Injection Pulse Width, Base (Fuel IPW Base)"),
+     "what": L("インジェクタの基本噴射時間。空気量に対する燃料量の基礎で、空燃比に直結。",
+               "The injector's base injection time. It is the foundation of fuel quantity versus "
+               "air mass and ties directly to the air-fuel ratio."),
+     "adjust": L("インジェクタ交換時はここと『オフセット/スケーリング』で容量・デッドタイムを合わせる。"
+                 "値↑=リッチ/値↓=リーン。",
+                 "When changing injectors, match flow and dead-time here together with the "
+                 "'offset / scaling' tables. Higher = richer, lower = leaner."),
+     "caution": L("インジェクタ特性を無視した変更は低開度で大きくズレる。交換時は必ず対応データで。",
+                  "Changes that ignore injector characteristics drift badly at small openings. "
+                  "Always use data matched to the injector when swapping.")},
+    {"kind": "scalars", "title": L("回転リミッタ(レブリミット) Rev Limit", "Rev Limiter (Rev Limit)"),
+     "what": L("回転数の上限保護。条件別に『燃料カット』と『スロットルカット』がある。",
+               "Upper-RPM protection. Depending on conditions it uses either fuel cut or throttle "
+               "cut."),
+     "adjust": L("値を上げると許容回転が上がる。上げる場合はバルブ・駆動系の許容回転を必ず確認。",
+                 "Raising the value raises the allowed RPM. If you raise it, always confirm the "
+                 "valve-train and drivetrain are rated for that speed."),
+     "caution": L("機械的限界を超える設定はエンジン破損に直結。むやみに上げない。",
+                  "Settings beyond the mechanical limit lead straight to engine failure. Do not "
+                  "raise it carelessly."),
      "items": [
-         (0xC487C, "燃料カット: 温間・MT(実質のレブ)"),
-         (0xC4878, "燃料カット: AT(73C0タイマ作動中)"),
-         (0xC4870, "燃料カット: 冷間/一次しきい値以下・故障時"),
-         (0xC4874, "燃料カット: 冷間/二次・始動時"),
-         (0xC53BC, "スロットルカット: クラッチ踏込(ニュートラル空吹かし保護)"),
-         (0xC53C0, "スロットルカット: クラッチ非踏込(走行中/実質無効)"),
+         (0xC487C, L("燃料カット: 温間・MT(実質のレブ)", "Fuel cut: warm / MT (the effective rev limit)")),
+         (0xC4878, L("燃料カット: AT(73C0タイマ作動中)", "Fuel cut: AT (while the 73C0 timer is active)")),
+         (0xC4870, L("燃料カット: 冷間/一次しきい値以下・故障時", "Fuel cut: cold / below primary threshold / fault")),
+         (0xC4874, L("燃料カット: 冷間/二次・始動時", "Fuel cut: cold / secondary / cranking")),
+         (0xC53BC, L("スロットルカット: クラッチ踏込(ニュートラル空吹かし保護)",
+                     "Throttle cut: clutch depressed (neutral free-rev protection)")),
+         (0xC53C0, L("スロットルカット: クラッチ非踏込(走行中/実質無効)",
+                     "Throttle cut: clutch released (driving / effectively disabled)")),
      ]},
-    {"kind": "scalars", "title": "速度リミッタ / アイドル Speed & Idle",
-     "what": "車速リミッタの作動条件と、目標アイドル回転の代表値。",
-     "adjust": "速度リミッタ解除は自己責任・公道では法令順守。アイドルは高め=安定/低め=静粛(低すぎでストール)。",
-     "caution": "車速リミッタの変更は用途・法令を確認。アイドルは冷間時の安定も要確認。",
+    {"kind": "scalars", "title": L("速度リミッタ / アイドル Speed & Idle", "Speed Limiter / Idle (Speed & Idle)"),
+     "what": L("車速リミッタの作動条件と、目標アイドル回転の代表値。",
+               "The conditions that trigger the vehicle-speed limiter, plus representative "
+               "target-idle values."),
+     "adjust": L("速度リミッタ解除は自己責任・公道では法令順守。アイドルは高め=安定/低め=静粛(低すぎでストール)。",
+                 "Removing the speed limiter is at your own risk; obey the law on public roads. "
+                 "Higher idle = more stable, lower idle = quieter (too low stalls)."),
+     "caution": L("車速リミッタの変更は用途・法令を確認。アイドルは冷間時の安定も要確認。",
+                  "Check the intended use and the law before changing the speed limiter. Also "
+                  "confirm cold-start stability when changing idle."),
      "items": [
-         (0xC47EC, "車速リミッタ: 作動車速しきい値"),
-         (0xC47E4, "車速リミッタ: 作動RPMしきい値"),
+         (0xC47EC, L("車速リミッタ: 作動車速しきい値", "Speed limiter: activation vehicle-speed threshold")),
+         (0xC47E4, L("車速リミッタ: 作動RPMしきい値", "Speed limiter: activation RPM threshold")),
      ]},
 ]
 
@@ -324,17 +407,24 @@ def _table_line(t, rom):
     if ya:
         ax.append("Y=" + i18n.axis_label(ya.name))
     axs = ("  " + " ".join(ax)) if ax else ""
-    rng = f"{min(flat):g}〜{max(flat):g}" if flat else "—"
-    return f"{nm}  [{r}×{c}]{axs}  範囲 {rng}   [@0x{t.address:X}]"
+    sep = L("〜", "–")
+    rng = f"{min(flat):g}{sep}{max(flat):g}" if flat else "—"
+    return f"{nm}  [{r}×{c}]{axs}  {L('範囲', 'range')} {rng}   [@0x{t.address:X}]"
 
 
 def section_full_reference(d, rd, rom):
     d._start_page()
-    d.h1("4. 全マップ リファレンス(カテゴリ別・全テーブル)")
-    d.para("この章は定義に含まれる全テーブル(" + str(len(rd.tables)) +
-           "件)の一覧です。各カテゴリに解説と『値を変えると』を付け、"
-           "テーブルごとに [次元] 軸 範囲 と現在値(1×1は値)・アドレスを示します。"
-           "個別の深掘り解説と調整指針は第3章(主要マップ)を参照してください。", color=d.sub)
+    d.h1(L("4. 全マップ リファレンス(カテゴリ別・全テーブル)",
+           "4. Full Map Reference (all tables, by category)"))
+    d.para(L("この章は定義に含まれる全テーブル(" + str(len(rd.tables)) +
+             "件)の一覧です。各カテゴリに解説と『値を変えると』を付け、"
+             "テーブルごとに [次元] 軸 範囲 と現在値(1×1は値)・アドレスを示します。"
+             "個別の深掘り解説と調整指針は第3章(主要マップ)を参照してください。",
+             "This chapter lists every table in the definition (" + str(len(rd.tables)) +
+             " total). Each category carries a description and an 'Effect of changes' note, and "
+             "every table shows its [dimensions], axes, value range (or the value itself for 1x1) "
+             "and address. For in-depth notes and tuning guidance see Chapter 3 (key maps)."),
+           color=d.sub)
     cats = {}
     for t in rd.tables:
         cats.setdefault(t.category, []).append(t)
@@ -342,10 +432,10 @@ def section_full_reference(d, rd, rom):
         d.h2(i18n.translate_category(cat))
         desc = i18n.describe_category(cat)
         if desc and "未登録" not in desc:
-            d.para("解説: " + desc, size=9, color=d.sub, gap=2)
+            d.para(L("解説: ", "Description: ") + desc, size=9, color=d.sub, gap=2)
         eff = i18n.effect_of(cat)
         if eff and "意味が分からない" not in eff:
-            d.para("値を変えると: " + eff, size=9, color=d.sub, gap=3)
+            d.para(L("値を変えると: ", "Effect of changes: ") + eff, size=9, color=d.sub, gap=3)
         for t in sorted(cats[cat], key=lambda x: (x.name, x.address)):
             d.para(_table_line(t, rom), size=8.5, color=d.ink, gap=1, lead=1.3, indent=8)
         d.spacer(3)
@@ -353,14 +443,20 @@ def section_full_reference(d, rd, rom):
 
 def section_relationships(d, rd, rom):
     d._start_page()
-    d.h1("5. マップ間の連動・関係性")
-    d.para("マップは独立ではなく、軸の共有や制御の加減算・クランプで互いに影響します。"
-           "1つを変えると関連するマップの効き方も変わるため、関係を理解して調整してください。",
+    d.h1(L("5. マップ間の連動・関係性", "5. Map Interactions and Relationships"))
+    d.para(L("マップは独立ではなく、軸の共有や制御の加減算・クランプで互いに影響します。"
+             "1つを変えると関連するマップの効き方も変わるため、関係を理解して調整してください。",
+             "Maps are not independent: they interact through shared axes and through the ECU "
+             "adding, subtracting and clamping their outputs. Changing one map changes how related "
+             "maps behave, so understand the relationships before tuning."),
            color=d.ink)
 
-    d.h2("5.1 軸を共有するマップ(同じ軸を変えると全てに影響)")
-    d.para("同じ軸(ブレークポイント)を複数のマップが共有しています。その軸の目盛りを変えると、"
-           "共有する全マップの格子位置が同時に動きます。主な共有軸:", color=d.sub)
+    d.h2(L("5.1 軸を共有するマップ(同じ軸を変えると全てに影響)",
+           "5.1 Maps that share axes (changing one axis affects them all)"))
+    d.para(L("同じ軸(ブレークポイント)を複数のマップが共有しています。その軸の目盛りを変えると、"
+             "共有する全マップの格子位置が同時に動きます。主な共有軸:",
+             "Several maps share the same axis (breakpoints). Changing that axis's scale moves the "
+             "grid positions of every map that shares it at once. Main shared axes:"), color=d.sub)
     axis_use = {}
     for t in rd.tables:
         for a in (t.x_axis, t.y_axis):
@@ -369,48 +465,83 @@ def section_relationships(d, rd, rom):
     for name, ts in sorted(axis_use.items(), key=lambda kv: -len(kv[1]))[:10]:
         cats = sorted({i18n.translate_category(x.category).split(" - ")[0] for x in ts})
         lbl = i18n.axis_label(name)
-        d.bullet(f"{lbl}({name}): {len(ts)}マップが共有 — 例: " + "、".join(cats[:5]), size=9)
+        joiner = L("、", ", ")
+        shared = L(f"{len(ts)}マップが共有 — 例: ", f"{len(ts)} maps share this — e.g. ")
+        d.bullet(f"{lbl}({name}): {shared}" + joiner.join(cats[:5]), size=9)
 
-    d.h2("5.2 点火系の連動")
-    d.para("最終点火時期 = 『点火ベース(基本進角)』+ 各種補正、ただし『点火上限』でクランプ:", color=d.ink)
-    for b in ["『点火ベース(Spark Base)』= 回転数×負荷の基本進角(出発点)。",
-              "『点火ベース補正(ECT/IAT)』『点火補正(ノックリタード/冷間進角/急開/高回転高水温ほか)』"
-              "がベースに加減算される。",
-              "『点火上限(Spark Limits / 点火ベース上限)』が最終値を進角/遅角側で制限。",
-              "→ ベースを上げても上限で頭打ち、補正で実際の点火はずれる。3つをセットで見ること。"]:
+    d.h2(L("5.2 点火系の連動", "5.2 Ignition system interactions"))
+    d.para(L("最終点火時期 = 『点火ベース(基本進角)』+ 各種補正、ただし『点火上限』でクランプ:",
+             "Final ignition timing = 'Spark Base (base advance)' + various corrections, then "
+             "clamped by the 'Spark Limits':"), color=d.ink)
+    for b in [L("『点火ベース(Spark Base)』= 回転数×負荷の基本進角(出発点)。",
+                "'Spark Base' = the base advance versus RPM x load (the starting point)."),
+              L("『点火ベース補正(ECT/IAT)』『点火補正(ノックリタード/冷間進角/急開/高回転高水温ほか)』"
+                "がベースに加減算される。",
+                "'Spark base corrections (ECT/IAT)' and 'spark corrections (knock retard, cold "
+                "advance, tip-in, high-RPM / high-temp, etc.)' are added to or subtracted from the "
+                "base."),
+              L("『点火上限(Spark Limits / 点火ベース上限)』が最終値を進角/遅角側で制限。",
+                "'Spark Limits' cap the final value on the advance and retard sides."),
+              L("→ ベースを上げても上限で頭打ち、補正で実際の点火はずれる。3つをセットで見ること。",
+                "-> Even if you raise the base, the limit caps it and corrections shift the actual "
+                "timing. Look at all three together.")]:
         d.bullet(b, size=9)
 
-    d.h2("5.3 燃料系の連動")
-    for b in ["空気量(『エンジンセンサ MAF/MAP』特性 →『エンジン負荷 Load スケーリング』)が"
-              "負荷(Load)を決め、これが点火・燃料・VVT の“縦軸”になる。",
-              "噴射量 = 『目標空燃比(Fuel Target OL/CL)』と『燃料噴射パルス幅(Fuel IPW ベース + "
-              "オフセット/スケーリング)』で決定。",
-              "さらに『燃料補正(LTFT/STFT・暖機増量・加速増量・減速カット)』で加減。",
-              "→ センサ特性やLoadスケーリングを変えると、Loadを軸に持つ“全マップ”の参照位置がずれる"
-              "(最も影響範囲が広い)。インジェクタ交換時はIPWベース+オフセットを必ずセットで。"]:
+    d.h2(L("5.3 燃料系の連動", "5.3 Fuel system interactions"))
+    for b in [L("空気量(『エンジンセンサ MAF/MAP』特性 →『エンジン負荷 Load スケーリング』)が"
+                "負荷(Load)を決め、これが点火・燃料・VVT の“縦軸”になる。",
+                "Air mass ('engine sensor MAF/MAP' characteristics -> 'engine Load scaling') "
+                "determines Load, which is the 'vertical axis' for ignition, fuel and VVT."),
+              L("噴射量 = 『目標空燃比(Fuel Target OL/CL)』と『燃料噴射パルス幅(Fuel IPW ベース + "
+                "オフセット/スケーリング)』で決定。",
+                "Injection quantity = 'target AFR (Fuel Target OL/CL)' plus 'fuel injection pulse "
+                "width (Fuel IPW base + offset / scaling)'."),
+              L("さらに『燃料補正(LTFT/STFT・暖機増量・加速増量・減速カット)』で加減。",
+                "Then 'fuel corrections (LTFT/STFT, warm-up enrichment, acceleration enrichment, "
+                "decel cut)' adjust it further."),
+              L("→ センサ特性やLoadスケーリングを変えると、Loadを軸に持つ“全マップ”の参照位置がずれる"
+                "(最も影響範囲が広い)。インジェクタ交換時はIPWベース+オフセットを必ずセットで。",
+                "-> Changing the sensor characteristics or Load scaling shifts the lookup position "
+                "of every map that uses Load as an axis (the widest-reaching change). When swapping "
+                "injectors, always change the IPW base and offset together.")]:
         d.bullet(b, size=9)
 
-    d.h2("5.4 吸気・VVT の連動")
-    for b in ["『可変吸気(IMRC/IMTV)』はRPMしきい値で切替わり、充填効率(VE)が変化 → 同じ負荷でも"
-              "必要な燃料/点火が変わる。",
-              "『可変バルブタイミング(VVT)』もVE・内部EGRを変える → 燃料/点火の最適点に影響。"]:
+    d.h2(L("5.4 吸気・VVT の連動", "5.4 Intake and VVT interactions"))
+    for b in [L("『可変吸気(IMRC/IMTV)』はRPMしきい値で切替わり、充填効率(VE)が変化 → 同じ負荷でも"
+                "必要な燃料/点火が変わる。",
+                "'Variable intake (IMRC/IMTV)' switches at an RPM threshold and changes volumetric "
+                "efficiency (VE) -> the fuel / ignition needed changes even at the same load."),
+              L("『可変バルブタイミング(VVT)』もVE・内部EGRを変える → 燃料/点火の最適点に影響。",
+                "'Variable valve timing (VVT)' also changes VE and internal EGR -> it affects the "
+                "optimum fuel / ignition point.")]:
         d.bullet(b, size=9)
 
-    d.h2("5.5 アイドル系の連動")
-    d.para("『目標アイドル回転数』↔『点火アイドル(Spark Idle)』↔『アイドル負荷(空気量)』↔"
-           "『アイドル補正』が相互に効き合ってアイドルを維持。どれか単独で詰めると不安定になりやすい。",
+    d.h2(L("5.5 アイドル系の連動", "5.5 Idle system interactions"))
+    d.para(L("『目標アイドル回転数』↔『点火アイドル(Spark Idle)』↔『アイドル負荷(空気量)』↔"
+             "『アイドル補正』が相互に効き合ってアイドルを維持。どれか単独で詰めると不安定になりやすい。",
+             "'Target idle RPM' <-> 'Spark Idle' <-> 'idle load (air mass)' <-> 'idle corrections' "
+             "work together to hold the idle. Tuning any one of them in isolation tends to make the "
+             "idle unstable."),
            size=9, color=d.ink)
 
-    d.h2("5.6 リミッタ/整合性")
-    for b in ["『回転リミッタ(燃料カット)』と『スロットルカット(クラッチ踏込時)』は条件別の対で、"
-              "ニュートラル空吹かし時はスロットルカットが先に効く。",
-              "どのマップを編集しても『チェックサム表(0xFF650〜)』の再計算が必要(保存時に自動補正)。",
-              "『フラッシュカウンタ(0xFFB00)』はECUが書込毎に更新する領域で、読み戻し照合では除外する。"]:
+    d.h2(L("5.6 リミッタ/整合性", "5.6 Limiters and integrity"))
+    for b in [L("『回転リミッタ(燃料カット)』と『スロットルカット(クラッチ踏込時)』は条件別の対で、"
+                "ニュートラル空吹かし時はスロットルカットが先に効く。",
+                "The 'rev limiter (fuel cut)' and 'throttle cut (clutch depressed)' are a "
+                "condition-based pair; during a neutral free-rev the throttle cut acts first."),
+              L("どのマップを編集しても『チェックサム表(0xFF650〜)』の再計算が必要(保存時に自動補正)。",
+                "Editing any map requires recalculating the 'checksum table (0xFF650+)' (corrected "
+                "automatically on save)."),
+              L("『フラッシュカウンタ(0xFFB00)』はECUが書込毎に更新する領域で、読み戻し照合では除外する。",
+                "The 'flash counter (0xFFB00)' is a region the ECU updates on every write, so it is "
+                "excluded from read-back comparison.")]:
         d.bullet(b, size=9)
 
 
 def section_notes(d):
     import json
+    if LANG == "en":
+        return  # 蓄積メモ(map_notes.json)は日本語のみ。英語版では省略。
     if not NOTES_PATH.exists():
         return
     try:
@@ -444,6 +575,7 @@ def section_notes(d):
 
 
 def build():
+    i18n.set_language(LANG)
     rd = ltdef.parse(MAIN_JSON, CALID_JSON)
     data = ROM_PATH.read_bytes()
     rom = Rom(data, rd)
@@ -454,84 +586,148 @@ def build():
     d = Doc()
     # ---- 表紙 ----
     d.y = 150
-    d.para("NCEC ROM マップエディタ", size=26, color=d.accent, gap=6)
-    d.para("詳細取扱説明書", size=18, color=d.ink, gap=20)
-    d.para(f"対象ECU: Denso NC / Renesas SH7058   CALID {cal}   世代 {gen}", size=11, color=d.sub)
-    d.para(f"ROM: {ROM_PATH.name}   生成日: {datetime.date.today().isoformat()}", size=11, color=d.sub, gap=20)
-    d.para("本書は実ROMの値を読み取って自動生成しています。ROM・ツールに変更があれば "
-           "tools/gen_manual.py を再実行すると最新版に更新されます。", size=10, color=d.sub)
+    d.para(L("NCEC ROM マップエディタ", "NCEC ROM Map Editor"), size=26, color=d.accent, gap=6)
+    d.para(L("詳細取扱説明書", "Detailed User Manual"), size=18, color=d.ink, gap=20)
+    d.para(L(f"対象ECU: Denso NC / Renesas SH7058   CALID {cal}   世代 {gen}",
+             f"Target ECU: Denso NC / Renesas SH7058   CALID {cal}   Generation {gen}"),
+           size=11, color=d.sub)
+    d.para(L(f"ROM: {ROM_PATH.name}   生成日: {datetime.date.today().isoformat()}",
+             f"ROM: {ROM_PATH.name}   Generated: {datetime.date.today().isoformat()}"),
+           size=11, color=d.sub, gap=20)
+    d.para(L("本書は実ROMの値を読み取って自動生成しています。ROM・ツールに変更があれば "
+             "tools/gen_manual.py を再実行すると最新版に更新されます。",
+             "This document is generated automatically from the values in the actual ROM. "
+             "Re-run tools/gen_manual.py after any change to the ROM or the tool to refresh it."),
+           size=10, color=d.sub)
     d.spacer(14)
-    d.para("⚠ 安全上の注意", size=12, color=d.warn, gap=4)
-    for b in ["作業は予備(ベンチ)ECUで行う前提。車両搭載ECUへの書き込みは行わないこと。",
-              "点火時期・空燃比・リミッタの変更はエンジン破損の危険があります。意味が分からない項目は変更しない。",
-              "編集後の保存ではチェックサムを自動補正します。実機書き込みは別途SBLが必要です(後述)。"]:
+    d.para(L("⚠ 安全上の注意", "⚠ Safety notice"), size=12, color=d.warn, gap=4)
+    for b in [L("作業は予備(ベンチ)ECUで行う前提。車両搭載ECUへの書き込みは行わないこと。",
+                "Work on a spare (bench) ECU. Do not write to the ECU installed in a vehicle."),
+              L("点火時期・空燃比・リミッタの変更はエンジン破損の危険があります。意味が分からない項目は変更しない。",
+                "Changing ignition timing, AFR or limiters can destroy the engine. Do not change "
+                "anything you do not understand."),
+              L("編集後の保存ではチェックサムを自動補正します。実機書き込みは別途SBLが必要です(後述)。",
+                "Checksums are corrected automatically on save. Flashing the real ECU additionally "
+                "requires an SBL (see below).")]:
         d.bullet(b, size=10)
 
     # ---- §1 概要 ----
     d._start_page()
-    d.h1("1. 概要")
-    d.para("本ソフトは、2005年式 NCEC ロードスター(LF-VE / SH7058 ECU)の ROM を読み込み、"
-           "各種マップ(テーブル)を表示・編集し、チェックサムを補正して保存するための、"
-           "自作のオープンな GUI ツールです。LinkECU / Haltech のような純正書き換え型の"
-           "チューニング環境を目標にしています。")
-    d.h2("できること")
-    for b in ["ROM(.bin)の読み込みと、カテゴリ別ツリーからのマップ選択(日本語表示)。",
-              "2D/3D マップのヒートマップ表示・セル編集、軸ラベル表示、マップ別の解説。",
-              "保存時のチェックサム自動補正(nc-flash と byte 単位で一致を検証済み)。",
-              "実機ライブ表示(OBD-II):回転数・負荷・水温・電圧・DTC 等と、現在運転点のセル追従。",
-              "ECU 吸い出し(Mode 23 読み出し)、ECU↔ROM 照合、ROM↔ROM 照合。"]:
+    d.h1(L("1. 概要", "1. Overview"))
+    d.para(L("本ソフトは、2005年式 NCEC ロードスター(LF-VE / SH7058 ECU)の ROM を読み込み、"
+             "各種マップ(テーブル)を表示・編集し、チェックサムを補正して保存するための、"
+             "自作のオープンな GUI ツールです。LinkECU / Haltech のような純正書き換え型の"
+             "チューニング環境を目標にしています。",
+             "This is an open, self-built GUI tool that loads the ROM of a 2005 NCEC Roadster "
+             "(LF-VE / SH7058 ECU), displays and edits its maps (tables), and saves with the "
+             "checksum corrected. It aims to be a native-reflash tuning environment in the style "
+             "of LinkECU / Haltech."))
+    d.h2(L("できること", "What it can do"))
+    for b in [L("ROM(.bin)の読み込みと、カテゴリ別ツリーからのマップ選択(日本語表示)。",
+                "Load a ROM (.bin) and pick maps from a category tree (with localized names)."),
+              L("2D/3D マップのヒートマップ表示・セル編集、軸ラベル表示、マップ別の解説。",
+                "Heatmap view and cell editing of 2D/3D maps, axis labels, and per-map notes."),
+              L("保存時のチェックサム自動補正(nc-flash と byte 単位で一致を検証済み)。",
+                "Automatic checksum correction on save (byte-for-byte verified against nc-flash)."),
+              L("実機ライブ表示(OBD-II):回転数・負荷・水温・電圧・DTC 等と、現在運転点のセル追従。",
+                "Live monitoring on the real ECU (OBD-II): RPM, load, coolant, voltage, DTCs, etc., "
+                "with active-cell tracking of the current operating point."),
+              L("ECU 吸い出し(Mode 23 読み出し)、ECU↔ROM 照合、ROM↔ROM 照合。",
+                "ECU read-out (Mode 23), ECU-vs-ROM compare, and ROM-vs-ROM compare.")]:
         d.bullet(b)
-    d.h2("現在の制約")
-    for b in ["実機への『書き込み(フラッシュ)』には SBL(セカンダリブートローダ)が必要で、"
-              "入手待ち。認証・手順・チェックサム等の他要素は実装・検証済みで、SBL を入れれば書込可能。",
-              "ベンチ(エンジン停止)ではライブの運転点が静止するため、セル追従は左下に固定されます"
-              "(実走・信号注入時に動きます)。"]:
+    d.h2(L("現在の制約", "Current limitations"))
+    for b in [L("実機への『書き込み(フラッシュ)』には SBL(セカンダリブートローダ)が必要で、"
+                "入手待ち。認証・手順・チェックサム等の他要素は実装・検証済みで、SBL を入れれば書込可能。",
+                "'Flashing' the real ECU requires an SBL (Secondary Boot Loader), which is still "
+                "being sourced. Authentication, the sequence, checksums and the rest are already "
+                "implemented and verified; the tool can flash once an SBL is supplied."),
+              L("ベンチ(エンジン停止)ではライブの運転点が静止するため、セル追従は左下に固定されます"
+                "(実走・信号注入時に動きます)。",
+                "On a bench (engine off) the live operating point is static, so active-cell "
+                "tracking stays pinned to the lower-left (it moves while driving or when injecting "
+                "signals).")]:
         d.bullet(b)
 
     # ---- §2 使用方法 ----
     d._start_page()
-    d.h1("2. ソフトウェアの使用方法")
-    d.h2("画面構成")
-    for b in ["左: カテゴリ別ツリー(日本語)。検索欄で名称/カテゴリを絞り込み。",
-              "右上: 選択マップの情報(アドレス・次元・単位・型)と解説パネル。",
-              "右中: ライブ数値パネル(Live 時)。",
-              "右下: ヒートマップ・グリッド(セルをクリック→数値入力→Enterで確定)。"]:
+    d.h1(L("2. ソフトウェアの使用方法", "2. Using the Software"))
+    d.h2(L("画面構成", "Screen layout"))
+    for b in [L("左: カテゴリ別ツリー(日本語)。検索欄で名称/カテゴリを絞り込み。",
+                "Left: the category tree (localized). The search box filters by name / category."),
+              L("右上: 選択マップの情報(アドレス・次元・単位・型)と解説パネル。",
+                "Top-right: info on the selected map (address, dimensions, unit, type) and a notes "
+                "panel."),
+              L("右中: ライブ数値パネル(Live 時)。",
+                "Middle-right: the live value panel (while Live is running)."),
+              L("右下: ヒートマップ・グリッド(セルをクリック→数値入力→Enterで確定)。",
+                "Bottom-right: the heatmap grid (click a cell -> type a value -> Enter to "
+                "commit).")]:
         d.bullet(b)
-    d.h2("ツールバーの各ボタン")
+    d.h2(L("ツールバーの各ボタン", "Toolbar buttons"))
     for name, desc in [
-        ("ROMを開く", "既定定義(LibreTuner)でROMを読み込み。"),
-        ("保存 / 名前を付けて保存", "チェックサムを自動補正して書き出し。"),
-        ("ヘルプ", "簡易ヘルプ(docs/editor_help_ja.md)。"),
-        ("Live ▶/■", "実機OBDに接続しライブ表示開始/停止。現在運転点のセルを赤枠表示。"),
-        ("ECU吸出し", "実機から全1MBを読み出して.bin保存(読み取り専用)。"),
-        ("ECUと照合", "実機を読み出し、開いているROMと差分比較。"),
-        ("ROM照合", "2つの.binファイルの差分比較。"),
+        (L("ROMを開く", "Open ROM"),
+         L("既定定義(LibreTuner)でROMを読み込み。", "Load a ROM using the default (LibreTuner) definitions.")),
+        (L("保存 / 名前を付けて保存", "Save / Save As"),
+         L("チェックサムを自動補正して書き出し。", "Write out with the checksum corrected automatically.")),
+        (L("ヘルプ", "Help"),
+         L("簡易ヘルプ(docs/editor_help_ja.md)。", "Quick help (docs/editor_help_ja.md).")),
+        (L("Live ▶/■", "Live ▶/■"),
+         L("実機OBDに接続しライブ表示開始/停止。現在運転点のセルを赤枠表示。",
+           "Connect to the real ECU over OBD and start/stop live view. The current operating "
+           "point's cell is outlined in red.")),
+        (L("ECU吸出し", "Read ECU"),
+         L("実機から全1MBを読み出して.bin保存(読み取り専用)。",
+           "Read the full 1 MB from the real ECU and save it as a .bin (read-only).")),
+        (L("ECUと照合", "Compare ECU"),
+         L("実機を読み出し、開いているROMと差分比較。",
+           "Read the real ECU and diff it against the ROM you have open.")),
+        (L("ROM照合", "Compare ROMs"),
+         L("2つの.binファイルの差分比較。", "Diff two .bin files.")),
     ]:
         d.bullet(f"{name} … {desc}")
-    d.h2("基本ワークフロー")
-    d.para("①ROMを開く → ②ツリーからマップ選択 → ③セルを編集(Enter確定)→ "
-           "④保存(チェックサム自動補正)。編集値は色(ヒートマップ)で相対位置が分かります。")
-    d.h2("セルの色と記号")
-    for b in ["ヒートマップ: 低=青 → 高=赤。相対的な値の分布を表します。",
-              "「—」(灰): 未使用セル(0xFF等でNaN)。",
-              "赤枠: ライブ中の『現在の運転点に当たるセル』。"]:
+    d.h2(L("基本ワークフロー", "Basic workflow"))
+    d.para(L("①ROMを開く → ②ツリーからマップ選択 → ③セルを編集(Enter確定)→ "
+             "④保存(チェックサム自動補正)。編集値は色(ヒートマップ)で相対位置が分かります。",
+             "(1) Open ROM -> (2) pick a map in the tree -> (3) edit cells (Enter to commit) -> "
+             "(4) save (checksum auto-corrected). The heatmap colors show each value's relative "
+             "position."))
+    d.h2(L("セルの色と記号", "Cell colors and symbols"))
+    for b in [L("ヒートマップ: 低=青 → 高=赤。相対的な値の分布を表します。",
+                "Heatmap: low = blue -> high = red. It shows the relative distribution of values."),
+              L("「—」(灰): 未使用セル(0xFF等でNaN)。",
+                "'—' (gray): an unused cell (NaN, e.g. 0xFF)."),
+              L("赤枠: ライブ中の『現在の運転点に当たるセル』。",
+                "Red outline: the cell at the current operating point while Live is running.")]:
         d.bullet(b)
-    d.h2("ライブ表示と照合の注意")
-    for b in ["吸い出し/照合/Live はCANアダプタ(gs_usb)を占有します(同時使用不可)。",
-              "吸い出し・照合は認証(プログラミングセッション+セキュリティ解除)を行います"
-              "(読み取り専用・消去/書込なし)。終了後は通常セッションへ自動復帰。",
-              "実車のOBD2から行う場合は CAN-H(6)/CAN-L(14)に加え GND(4/5)の接続が必須。"]:
+    d.h2(L("ライブ表示と照合の注意", "Notes on live view and comparison"))
+    for b in [L("吸い出し/照合/Live はCANアダプタ(gs_usb)を占有します(同時使用不可)。",
+                "Read / compare / Live each take exclusive use of the CAN adapter (gs_usb) — they "
+                "cannot run at the same time."),
+              L("吸い出し・照合は認証(プログラミングセッション+セキュリティ解除)を行います"
+                "(読み取り専用・消去/書込なし)。終了後は通常セッションへ自動復帰。",
+                "Read / compare perform authentication (programming session + security unlock) but "
+                "are read-only (no erase/write), and return to the normal session afterwards."),
+              L("実車のOBD2から行う場合は CAN-H(6)/CAN-L(14)に加え GND(4/5)の接続が必須。",
+                "Doing this from a vehicle's OBD-II port requires GND (4/5) in addition to CAN-H "
+                "(6) / CAN-L (14).")]:
         d.bullet(b)
-    d.h2("書き込み(フラッシュ)の現状")
-    d.para("認証→RoutineControl→RequestDownload(0x8000/0xFF800)→SBL+本体転送(0x400ブロック)"
-           "→TransferExit→リセット、という手順まで実装・実機で手前段階まで検証済みです。"
-           "唯一 SBL(NC1用・0x1800バイト)の入手が未了のため、実書き込みは保留中です。", color=d.ink)
+    d.h2(L("書き込み(フラッシュ)の現状", "Flashing: current status"))
+    d.para(L("認証→RoutineControl→RequestDownload(0x8000/0xFF800)→SBL+本体転送(0x400ブロック)"
+             "→TransferExit→リセット、という手順まで実装・実機で手前段階まで検証済みです。"
+             "唯一 SBL(NC1用・0x1800バイト)の入手が未了のため、実書き込みは保留中です。",
+             "The full sequence — authentication -> RoutineControl -> RequestDownload "
+             "(0x8000/0xFF800) -> SBL + main transfer (0x400 blocks) -> TransferExit -> reset — is "
+             "implemented and verified on the real ECU up to the step before writing. Only the SBL "
+             "(for NC1, 0x1800 bytes) is still missing, so actual writing is on hold."), color=d.ink)
 
     # ---- §3 各マップ詳細 ----
     d._start_page()
-    d.h1("3. 各マップの詳細と調整方法")
-    d.para("ここでは代表的・重要なマップを、実ROMの現在値つきで説明します。"
-           "(全テーブルはエディタのツリーから参照できます。)", color=d.sub)
+    d.h1(L("3. 各マップの詳細と調整方法", "3. Map Details and How to Tune Them"))
+    d.para(L("ここでは代表的・重要なマップを、実ROMの現在値つきで説明します。"
+             "(全テーブルはエディタのツリーから参照できます。)",
+             "This chapter covers the most representative and important maps, with their current "
+             "values from the actual ROM. (Every table is browsable from the editor's tree.)"),
+           color=d.sub)
 
     for spec in KEY_MAPS:
         if spec["kind"] == "find":
@@ -539,9 +735,12 @@ def build():
             if not t:
                 continue
             d.h2(spec["title"])
-            d.para(f"対象テーブル: {t.name}  @0x{t.address:X}  "
-                   f"(カテゴリ: {i18n.translate_category(t.category)})", size=9, color=d.sub, gap=3)
-            d.para("● 概要: " + spec["what"])
+            d.para(L(f"対象テーブル: {t.name}  @0x{t.address:X}  "
+                     f"(カテゴリ: {i18n.translate_category(t.category)})",
+                     f"Table: {t.name}  @0x{t.address:X}  "
+                     f"(category: {i18n.translate_category(t.category)})"),
+                   size=9, color=d.sub, gap=3)
+            d.para(L("● 概要: ", "● Overview: ") + spec["what"])
             # ヒートマップ
             grid = rom.read_table(t)
             r, c = rom.dims(t)
@@ -554,18 +753,18 @@ def build():
             vfmt = "%.2f" if (abs(max(v for row in grid for v in row if not _isnan(v))) < 10) else "%.0f"
             w, h = render_heatmap(grid, xv, yv, xl, yl, spec["title"], png, vfmt)
             d.image(png, w, h, maxw=d.W - d.ml - d.mr)
-            d.para("● 値を変えると: " + spec["adjust"])
-            d.para("⚠ 注意: " + spec["caution"], color=d.warn)
+            d.para(L("● 値を変えると: ", "● Effect of changes: ") + spec["adjust"])
+            d.para(L("⚠ 注意: ", "⚠ Caution: ") + spec["caution"], color=d.warn)
             d.spacer(4)
         else:  # scalars
             d.h2(spec["title"])
-            d.para("● 概要: " + spec["what"])
+            d.para(L("● 概要: ", "● Overview: ") + spec["what"])
             for addr, label in spec["items"]:
                 val = f32(data, addr)
                 d.para(f"    ・{label}: {val:,.0f}  (@0x{addr:X})", size=10, color=d.ink, gap=2)
             d.spacer(2)
-            d.para("● 値を変えると: " + spec["adjust"])
-            d.para("⚠ 注意: " + spec["caution"], color=d.warn)
+            d.para(L("● 値を変えると: ", "● Effect of changes: ") + spec["adjust"])
+            d.para(L("⚠ 注意: ", "⚠ Caution: ") + spec["caution"], color=d.warn)
             d.spacer(4)
 
     # ---- §4 全マップ リファレンス / §5 連動 / §6 補足解説(蓄積)----
@@ -579,7 +778,7 @@ def build():
     # 中間ヒートマップ画像は PDF に埋め込み済みなので削除
     import shutil
     shutil.rmtree(TMP, ignore_errors=True)
-    print("saved:", OUT_PDF, f"({OUT_PDF.stat().st_size} bytes, {pages} pages)")
+    print(f"saved: {OUT_PDF} [lang={LANG}] ({OUT_PDF.stat().st_size} bytes, {pages} pages)")
 
 
 if __name__ == "__main__":
