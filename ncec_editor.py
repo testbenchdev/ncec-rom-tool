@@ -55,6 +55,9 @@ class Editor(tk.Tk):
         self.cur_table: defs.Table | None = None
         self.modified = False
         self.cells: list[list[tk.Entry]] = []
+        self.axis_edit = False          # 軸ブレークポイント編集モード(既定OFF・誤操作防止)
+        self.xcells: list[tk.Entry] = []
+        self.ycells: list[tk.Entry] = []
         # ライブ(実機 OBD)状態
         self.live_reader: livelog.LiveReader | None = None
         self._live_after = None
@@ -112,6 +115,8 @@ class Editor(tk.Tk):
         self.btns["cmp_ecu"].pack(side="left", padx=2)
         self.btns["cmp_rom"] = tk.Button(bar, text=i18n.ui("cmp_rom"), command=self.compare_files)
         self.btns["cmp_rom"].pack(side="left", padx=2)
+        self.axis_btn = tk.Button(bar, text=i18n.ui("axis_edit_off"), command=self.toggle_axis_edit)
+        self.axis_btn.pack(side="left", padx=(12, 2))
         self.lang_btn = tk.Button(bar, text=i18n.ui("lang"), command=self.toggle_lang)
         self.lang_btn.pack(side="left", padx=(12, 2))
         self.search_var = tk.StringVar()
@@ -275,6 +280,8 @@ class Editor(tk.Tk):
         for w in self.gf.winfo_children():
             w.destroy()
         self.cells = []
+        self.xcells = []
+        self.ycells = []
         self._live_cell = None   # セル再構築で旧ハイライト参照を破棄
         t = self.cur_table
         if not t or not self.rom:
@@ -300,13 +307,16 @@ class Editor(tk.Tk):
         cat_desc = i18n.describe_category(t.category)
         parts = [f"【{cat_ja}】 {cat_desc}" if cat_desc else f"【{cat_ja}】"]
         shape = []
+        # 点数は軸の宣言 size(ax.elements)ではなく実グリッド次元(cols/rows)を表示する。
+        # 定義の size は複数 variant 共用の最大値で、この CALID の実テーブル幅/高さより大きい
+        # ことがあり(53テーブルで不一致)、グリッド本体と桁数がずれて見えるため。
         if t.ttype == "3D" and xa and ya:
             shape.append(f"{i18n.ui('map3d')}: {i18n.ui('axis_x')}={i18n.axis_label(xa.name)} "
-                         f"{xa.elements}{pt} / {i18n.ui('axis_y')}={i18n.axis_label(ya.name)} "
-                         f"{ya.elements}{pt}")
+                         f"{cols}{pt} / {i18n.ui('axis_y')}={i18n.axis_label(ya.name)} "
+                         f"{rows}{pt}")
         elif t.ttype == "2D":
             ax = ya or xa
-            n = (ax.elements if ax else cols * rows)
+            n = max(rows, cols) if ax else cols * rows
             albl = i18n.axis_label(ax.name) if ax else ""
             shape.append(f"{i18n.ui('map2d')}: {albl} {n}{pt}")
         else:
@@ -389,20 +399,46 @@ class Editor(tk.Tk):
                          font=(self.jp, 9, "bold"), borderwidth=1, relief="flat",
                          anchor="center").grid(row=0, column=c0, columnspan=span,
                                                sticky="nsew", padx=1, pady=1)
-        # X値見出し(ブレークポイント)
+        # X値見出し(ブレークポイント)。軸編集ONかつ書込可能な軸なら Entry で編集可。
+        ax_editable_x = self.axis_edit and xa is not None and not xa.static_values
+        ax_editable_y = self.axis_edit and ya is not None and not ya.static_values
         if xvals:
             if yvals:
                 tk.Label(self.gf, text="", bg="#1e2128").grid(row=xhdr_row, column=0)
             for j, xv in enumerate(xvals):
-                tk.Label(self.gf, text=fmt(xv) if isinstance(xv, float) else str(xv),
-                         bg="#2b3340", fg="#cfe0f5", font=(self.mono, 9, "bold"),
-                         width=8, borderwidth=1, relief="flat").grid(row=xhdr_row, column=c0 + j, sticky="nsew", padx=1, pady=1)
+                txt = fmt(xv) if isinstance(xv, float) else str(xv)
+                if ax_editable_x and isinstance(xv, float):
+                    e = tk.Entry(self.gf, width=8, justify="center", font=(self.mono, 9, "bold"),
+                                 relief="flat", bd=1, bg="#45526b", fg="#ffffff",
+                                 insertbackground="#ffffff")
+                    e.insert(0, txt)
+                    e.grid(row=xhdr_row, column=c0 + j, sticky="nsew", padx=1, pady=1)
+                    e.bind("<Return>", lambda ev, jj=j: self._commit_axis("x", jj))
+                    e.bind("<FocusOut>", lambda ev, jj=j: self._commit_axis("x", jj))
+                    self.xcells.append(e)
+                else:
+                    tk.Label(self.gf, text=txt,
+                             bg="#2b3340", fg="#cfe0f5", font=(self.mono, 9, "bold"),
+                             width=8, borderwidth=1, relief="flat").grid(row=xhdr_row, column=c0 + j, sticky="nsew", padx=1, pady=1)
+                    self.xcells.append(None)
         for i in range(rows):
             if yvals:
                 yv = yvals[i] if i < len(yvals) else ""
-                tk.Label(self.gf, text=fmt(yv) if isinstance(yv, float) else str(yv),
-                         bg="#2b3340", fg="#cfe0f5", font=(self.mono, 9, "bold"),
-                         width=8, borderwidth=1, relief="flat").grid(row=r0 + i, column=0, sticky="nsew", padx=1, pady=1)
+                ytxt = fmt(yv) if isinstance(yv, float) else str(yv)
+                if ax_editable_y and isinstance(yv, float):
+                    e = tk.Entry(self.gf, width=8, justify="center", font=(self.mono, 9, "bold"),
+                                 relief="flat", bd=1, bg="#45526b", fg="#ffffff",
+                                 insertbackground="#ffffff")
+                    e.insert(0, ytxt)
+                    e.grid(row=r0 + i, column=0, sticky="nsew", padx=1, pady=1)
+                    e.bind("<Return>", lambda ev, ii=i: self._commit_axis("y", ii))
+                    e.bind("<FocusOut>", lambda ev, ii=i: self._commit_axis("y", ii))
+                    self.ycells.append(e)
+                else:
+                    tk.Label(self.gf, text=ytxt,
+                             bg="#2b3340", fg="#cfe0f5", font=(self.mono, 9, "bold"),
+                             width=8, borderwidth=1, relief="flat").grid(row=r0 + i, column=0, sticky="nsew", padx=1, pady=1)
+                    self.ycells.append(None)
             rowcells = []
             for j in range(cols):
                 v = grid[i][j]
@@ -446,6 +482,71 @@ class Editor(tk.Tk):
         if isinstance(actual, (int, float)):
             e.config(bg=heat_color(actual, lo, hi), fg="#0b0d12")
         self._update_status()
+
+    # ---------- 軸(ブレークポイント)編集 ----------
+    def _axis_fmt(self, v):
+        t = self.cur_table
+        tsc = self.romdef.scalings.get(t.scaling) if (t and self.romdef) else None
+        if isinstance(v, float):
+            return (tsc.fmt % v) if tsc else f"{v:g}"
+        return str(v)
+
+    def _revert_axis(self, ax, role, idx):
+        cells = self.xcells if role == "x" else self.ycells
+        if idx >= len(cells) or cells[idx] is None:
+            return
+        vals = self.rom.read_axis(ax)
+        cur = vals[idx] if idx < len(vals) else 0.0
+        cells[idx].delete(0, "end")
+        cells[idx].insert(0, self._axis_fmt(cur))
+
+    def _commit_axis(self, role, idx):
+        if not self.cur_table or not self.rom:
+            return
+        t = self.cur_table
+        ax = t.x_axis if role == "x" else t.y_axis
+        cells = self.xcells if role == "x" else self.ycells
+        if ax is None or idx >= len(cells) or cells[idx] is None:
+            return
+        try:
+            val = float(cells[idx].get())
+        except ValueError:
+            self._revert_axis(ax, role, idx)
+            return
+        vals = self.rom.read_axis(ax)
+        old = vals[idx] if idx < len(vals) else None
+        if isinstance(old, float) and abs(old - val) < 1e-9:
+            return
+        # 単調増加(昇順)チェック: 左 < val < 右
+        lo = vals[idx - 1] if idx > 0 else None
+        hi = vals[idx + 1] if idx + 1 < len(vals) else None
+        if (lo is not None and val <= lo) or (hi is not None and val >= hi):
+            messagebox.showerror(
+                i18n.ui("axis_mono_title"),
+                i18n.ui("axis_mono_msg").format(
+                    lo=("-" if lo is None else f"{lo:g}"),
+                    hi=("-" if hi is None else f"{hi:g}"),
+                    v=f"{val:g}"))
+            self._revert_axis(ax, role, idx)
+            return
+        self.rom.write_axis_value(ax, idx, val)
+        self.modified = True
+        actual = self.rom.read_axis(ax)[idx]
+        cells[idx].delete(0, "end")
+        cells[idx].insert(0, self._axis_fmt(actual))
+        self._update_status()
+
+    def toggle_axis_edit(self):
+        if not self.axis_edit:
+            if not messagebox.askyesno(i18n.ui("axis_edit_warn_title"), i18n.ui("axis_edit_warn")):
+                return
+        self.axis_edit = not self.axis_edit
+        self.axis_btn.config(
+            text=i18n.ui("axis_edit_on" if self.axis_edit else "axis_edit_off"),
+            bg=("#b5651d" if self.axis_edit else "SystemButtonFace"),
+            fg=("#ffffff" if self.axis_edit else "#000000"))
+        if self.cur_table:
+            self._render_table()
 
     # ---------- save ----------
     def save_rom(self):
@@ -624,6 +725,7 @@ class Editor(tk.Tk):
         self.lang_btn.config(text=i18n.ui("lang"))
         self.search_lbl.config(text=i18n.ui("search"))
         self.live_btn.config(text=i18n.ui("live_off") if self.live_reader else i18n.ui("live_on"))
+        self.axis_btn.config(text=i18n.ui("axis_edit_on" if self.axis_edit else "axis_edit_off"))
         # ツリーと現在マップを再描画
         self._populate_tree()
         if self.cur_table:

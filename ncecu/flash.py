@@ -29,6 +29,7 @@ from dataclasses import dataclass
 
 from . import checksum
 from .diag import DiagClient, NegativeResponse
+from .isotp import IsoTpError
 from .security import compute_security_key
 
 # --- ROM / フラッシュ パラメータ(nc-flash constants.py と一致・実機確認済み)---
@@ -196,7 +197,9 @@ class Flasher:
         for _ in range(retries + 1):
             try:
                 r = self._req(req, timeout=timeout)
-            except (NegativeResponse, FlashError) as e:
+            except (NegativeResponse, FlashError, IsoTpError) as e:
+                # IsoTpError(SN不一致/CFタイムアウト)は取りこぼし起因が多い。
+                # 次要求の先頭で tp.flush() が残フレームを捨てるので、そのまま再試行で回復する。
                 last = e
                 continue
             if r and r[0] == 0x63:
