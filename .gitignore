@@ -8,9 +8,14 @@ sbl*.bin
 # サードパーティ製マニュアル(ルネサス等の著作物)
 docs/sh7058_plain_manual.pdf
 REN_*.pdf
-# 他ツールの配布物
+# 他ツールの配布物とその展開物(第三者著作物・巨大・保護されたコードを含む=絶対に追跡しない)
 nc-flash-*.zip
 mx5studio*
+NCFlash*.tar.gz
+NCFlash*.zip
+/NCFlash/
+/NCFlash_extracted/
+*_extracted/
 
 # 第三者のマップ定義(ライセンスの都合で同梱しない。READMEの手順で各自入手)
 defs/libretuner/
