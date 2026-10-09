@@ -215,12 +215,31 @@ def _scan_blob(data: bytes, source: str, cands, name=None, force=False):
 
 def scan_pyc_bytes(data: bytes, source: str, cands):
     code = _load_code(data)
-    if code is None:
-        return
-    for name, blob in _name_to_const(code).items():   # 名前付き(NC1/NC2判別用)
-        _scan_blob(blob, f"{source}::{name}", cands, name=name, force=True)
-    for blob in _collect_bytes_consts(code):           # その他の bytes 定数
-        _scan_blob(blob, f"{source}::const", cands)
+    if code is not None:
+        try:
+            for name, blob in _name_to_const(code).items():   # 名前付き(NC1/NC2判別用)
+                _scan_blob(blob, f"{source}::{name}", cands, name=name, force=True)
+            for blob in _collect_bytes_consts(code):           # その他の bytes 定数
+                _scan_blob(blob, f"{source}::const", cands)
+        except Exception:  # noqa  版ずれで dis/marshal が途中失敗しても下の raw で拾う
+            pass
+    # 版ずれ(bundle=Py3.12 を 3.14 で読む等)で marshal/dis が使えなくても、
+    # 平文の 0x1800 bytes 定数は .pyc 生バイト中で marshal の長さマーカーから正確に特定できる。
+    scan_marshal_bytes(data, f"{source}(marshal)", cands)
+
+
+def scan_marshal_bytes(data: bytes, source: str, cands):
+    """marshal の TYPE_STRING マーカー(0x73/0xF3 + 0x1800 のLE長)を検索し、
+    その直後 0x1800 バイトを候補にする。総当りスライドなしで正確・高速。"""
+    size_le = SBL_SIZE.to_bytes(4, "little")
+    for flag in (b"\x73", b"\xf3"):   # TYPE_STRING / TYPE_STRING|FLAG_REF
+        marker = flag + size_le
+        i = data.find(marker)
+        while i >= 0:
+            blob = data[i + 5:i + 5 + SBL_SIZE]
+            if len(blob) == SBL_SIZE:
+                _add_candidate(cands, blob, f"{source}@0x{i:X}")
+            i = data.find(marker, i + 1)
 
 
 def scan_raw_bytes(data: bytes, source: str, cands):
