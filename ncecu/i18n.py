@@ -240,7 +240,7 @@ _LT_TERMS_RAW = {
     "RPM": "回転数",
     "VSS": "車速",
     "APP": "アクセル開度(APP)",
-    "AFS": "吸入空気量(AFS)",
+    "AFS": "A/F(空燃比)センサ(AFS)",
     "ECT": "水温(ECT)",
     "IAT": "吸気温(IAT)",
     "MAF": "MAF",
@@ -297,7 +297,7 @@ CATEGORY_JA_LT = {
     "Engine Limiters - VSS": "リミッタ - 車速(スピードリミッタ)",
     "Engine Load - Limits": "エンジン負荷 - 上限",
     "Engine Load - Scaling": "エンジン負荷 - 算出スケーリング",
-    "Engine Sensors - AFS": "センサ - 吸入空気量(AFS/エアフロ)",
+    "Engine Sensors - AFS": "センサ - 空燃比(A/Fセンサ・AFS)",
     "Engine Sensors - ECT": "センサ - 水温(ECT)",
     "Engine Sensors - IAT": "センサ - 吸気温(IAT)",
     "Engine Sensors - KS": "センサ - ノック(KS)",
@@ -392,6 +392,8 @@ CATEGORY_JA_LT = {
     "Variable Cam Timing - Base": "可変バルブタイミング(VVT) - ベース",
     "Variable Cam Timing - DO NOT MODIFY": "可変バルブタイミング(VVT)〔変更禁止〕",
     "WIP - Alternator": "作業中(WIP) - オルタネータ",
+    "WIP - Torque Model Bank (RE)": "トルクモデル(RE・N·m確認済)",
+    "WIP - DBW Torque Coordinator (RE)": "DBWトルク協調(RE)",
     "Warm-Up Fuel Target OL - Base": "目標空燃比(開ループ) - 暖機時ベース",
 }
 
@@ -738,6 +740,51 @@ AXIS = {
     "FFFF": ("(未使用)", "(unused)", ""),
 }
 
+# 軸名の接頭辞が物理量と一致しない(LibreTuner命名の都合)軸の明示ラベル。
+# 単純な先頭トークン推定(_axis_pref)より先に、接頭辞の前方一致で判定する。
+# (キーは大文字。name.upper().startswith(key) で照合)
+AXIS_SPECIAL = {
+    # 名称は "THROTTLE_DUTY..." だが、値域 0〜23000+ が示す通り実体は推定体積流量(内部値)。
+    # 使用テーブル: "Estimated Volumetric Flow to Throttle Duty Aggregate Compensation"
+    "THROTTLE_DUTY_COMBINED_COMP_RAW": ("推定体積流量(内部値)", "Est. Volumetric Flow (raw)", ""),
+    # 回転数/車速 × 係数 = 算出ギア比。使用テーブル: "...Calculated Gear..."
+    "RPM/VSS": ("算出ギア(回転数/車速)", "Calc Gear (RPM/speed)", ""),
+    # 名称は "TP_ACT"(スロットル位置)だが、値 500〜7500(step 500)が示す通り実体は回転数。
+    # 使用テーブル: "TP factor for Estimated MAF"。他の TP_* 軸(TP_6CF8 等)は本物のスロットル%。
+    "TP_ACT": ("回転数", "Engine RPM", "rpm"),
+    # センサ変換表(電圧→温度)の入力軸はセンサ電圧。接頭辞 ECT/IAT で温度(°C)に誤判定される。
+    # "ECT_V_…"/"IAT_V_…" はこの変換表1本のみで、他の ECT_6D44 等(=水温°C)には一致しない。
+    "ECT_V": ("電圧", "Voltage", "V"),
+    "IAT_V": ("電圧", "Voltage", "V"),
+    "MAF_V": ("電圧", "Voltage", "V"),
+    # 定数名だが中身は水温ブレークポイント(-40〜100°C)。安全監視 目標アイドル回転ベース2本専用。
+    "CONST_80": ("水温", "Coolant", "°C"),
+    # A/Fセンサ変換表(電流→当量比)の入力軸はセンサ電流[mA](当量比ではない)。
+    # "EQ_RATIO_ACT_MA_…" はこの2本のみ。他の EQ_* 軸(当量比)には一致しない。
+    "EQ_RATIO_ACT_MA": ("電流", "Current", "mA"),
+    # 内部名 "2500/IMRC_DIVISOR_82DC" は IMRC 移行アキュムレータを 0〜100 に正規化した移行進捗。
+    # 使用テーブル: "IMRC Transition - Interpolation Bias"(0=旧ポート,100=新ポートへ完全移行)。
+    "2500/IMRC_DIVISOR": ("IMRC移行進捗", "IMRC transition progress", "%"),
+    # IDLE_* 軸は既定だと接頭辞 "IDLE"→"アイドル" で全て同じ表示になり区別できない。
+    # 物理量ごとに別ラベルを与える。startswith 判定のため具体的なキーを先に並べる
+    # (IDLE_SPEED_TRIM を IDLE_SPEED より前に置く)。
+    "IDLE_ERROR": ("アイドル回転偏差", "Idle Speed Error", "rpm"),      # 実回転−目標(±rpm)
+    "IDLE_LOAD": ("アイドル負荷", "Idle Load", ""),                      # 0〜1 正規化負荷
+    "IDLE_SPEED_TRIM": ("アイドル回転トリム位置", "Idle Speed Trim Pos", ""),
+    "IDLE_SPEED": ("アイドル回転数", "Idle Speed", "rpm"),               # 500〜1500rpm
+    # LOAD_DELTA_* は負荷“レベル”ではなく負荷の変化量(ΔLoad)。既定の "LOAD"→"エンジン負荷" だと
+    # 絶対負荷と区別できない。減速復帰の踏み直し量判定などに使う。他の LOAD_*(絶対負荷)には不一致。
+    "LOAD_DELTA": ("負荷変化量", "Load Delta", ""),
+}
+
+
+def _axis_special(name):
+    up = name.upper()
+    for k, v in AXIS_SPECIAL.items():
+        if up.startswith(k):
+            return v
+    return None
+
 
 def _axis_pref(name):
     import re
@@ -748,8 +795,7 @@ def axis_label(name: str) -> str:
     """軸名(例 'RPM_6DD8')から現在言語のラベル(単位付き)を返す。未知はそのまま。"""
     if not name:
         return ""
-    p = _axis_pref(name)
-    e = AXIS.get(p)
+    e = _axis_special(name) or AXIS.get(_axis_pref(name))
     if not e:
         return name
     ja, en, unit = e
@@ -758,7 +804,7 @@ def axis_label(name: str) -> str:
 
 
 def axis_unit(name: str) -> str:
-    e = AXIS.get(_axis_pref(name))
+    e = _axis_special(name) or AXIS.get(_axis_pref(name))
     return e[2] if e else ""
 
 
@@ -789,9 +835,394 @@ _UNIT_RULES = [
 
 def unit_of(category: str, name: str = "") -> str:
     """調整値の単位を推定(定義に単位が無いためキーワードから)。不明は空。"""
+    nm = (name or "").lower()
+    # 推定体積流量(Estimated Volumetric Flow)系はデータの意味が名前で決まる。
+    # カテゴリに "throttle duty" が入り % に誤判定されるため、名前で先に判定する。
+    #   ・… Scaler/Scaling(密度スケーラ等) = 倍率 → "×"
+    #   ・… to Throttle Duty …(デューティ補正)= "%"
+    #   ・それ以外(Default/Max/Min/Threshold 等 = 流量値そのもの)= 単位なし
+    if "volumetric flow" in nm:
+        if "scaler" in nm or "scaling" in nm:
+            return "×"
+        if "throttle duty" in nm:
+            return "%"
+        return ""
+    # 推定マスエアフロー(内部推定値。実MAFセンサの g/s ではなく体積流量と同じ内部値)。
+    # 実MAFスケーリングは名前が "MAF" で別途 g/s になるため、"estimated mass air" のみ対象。
+    if "estimated mass air" in nm:
+        return "×" if ("scaler" in nm or "scaling" in nm) else ""
+    # 診断フラグ(DTC Flags B): 全テーブルが 1x1 uint8 の有効/無効フラグ(値0/1)。名称に含む
+    # センサ種別(ECT/MAP/MAF/O2電圧/VSS/RPM/スロットル/点火 等)で物理単位に誤爆するため、
+    # カテゴリ一括で無単位にする(37/126本が °/kPa/°C/V/%/g/s/rpm/km/h に誤判定していた)。
+    if "dtc flags" in (category or "").lower():
+        return ""
+    # 診断しきい値(DTC Thresholds): キーワード規則(torque→N·m, afr→AFR, comp→%, timing→° 等)が
+    # 誤爆しやすいので、このカテゴリ限定で名称から個別に確定する(他カテゴリへは波及させない)。
+    if "dtc thresholds" in (category or "").lower():
+        # Activation Count / Counter Limit / 各種 Timer は発生回数・ループ計数で無単位。
+        #   例: "… Req Torque … Activation Count"(uint16=40)、"CMP Timing Over Advanced Timer"
+        #   (uint16 84〜1250, timing→° 誤爆)、"… Activation Timer"。
+        if "activation count" in nm or "counter limit" in nm or "timer" in nm:
+            return ""
+        # AFR センサ素子インピーダンス = Ω(値 3万〜8万。afr→AFR 誤爆を回避)。
+        if "impedence" in nm or "impedance" in nm:
+            return "Ω"
+        # CKP↔CMP 同期オフセット = 角度°(VCT の "CKP to CMP Offset" と同一量、値 8.7〜11.2)。
+        if "sync offset" in nm:
+            return "°"
+        # P0638 の "… TP Threshold" はスロットル位置しきい値=%(TP=throttle)。
+        if "tp threshold" in nm:
+            return "%"
+        # 上記以外(Fuel Trim=%, Load Threshold/AFS 境界=無単位, ECT=°C, Req Torque 閾値=N·m,
+        # TP factor for Estimated MAF=g/s 等)は後段の既定判定へ流す。
+    # トルクモデルバンク(RE): カテゴリに "torque"→N·m が全面に効くため、名称で役割別に単位を決める。
+    #   ・"… Spark …" = 最適(MBT)点火進角 → °  ・"… Factor …" = 無次元の補正係数 → 無単位
+    #   ・それ以外(Torque / Temp-Corr)= トルク → N·m(BMEP換算で負側-44N·m一致により確定)。
+    # DBWトルク協調(RE): BMEPトルク=kPa, スロットル=%, 係数=無単位, その他=無単位。
+    if "dbw torque coordinator" in (category or "").lower():
+        if "bmep" in nm:
+            return "kPa"
+        if "throttle" in nm:
+            return "%"
+        return ""
+    if "torque model bank" in (category or "").lower():
+        if "factor" in nm or "coeff" in nm or "sens" in nm:
+            return ""      # 無次元/2次係数(spark を名に含んでも係数は無単位 → spark判定より先)
+        if "spark" in nm:
+            return "°"
+        return "N·m"
+    # 排気量パッチ(Patch - Engine Displacement): "… Patch Address A/B/C" はコードが排気量定数を
+    # 参照するROMアドレス(ポインタ)で cc ではない(displacement→cc 誤爆を回避)。unpatched=元定数の
+    # アドレス、patched=新しい格納先(=下記 NaN 値テーブルのアドレス)。実排気量値 "… replace NaN …
+    # in cc"(float NaN)のみ cc のまま後段へ流す。
+    if "engine displacement" in nm and "patch address" in nm:
+        return ""
+    # WIP オルタネータ(WIP - Alternator): 名称の『| RPM …』条件で rpm→誤爆する項目を補正。
+    #   ・"Voltage Desired …"(Base/Add)は発電目標電圧=V(条件の RPM LT 5K 等に惑わされない)。
+    #   ・"WIP Limit | RPM …" は 0〜1 の界磁デューティ制限係数(×)で回転数ではない。
+    # "WIP Base RPM Threshold[/Hysteresis]"(主語が RPM Threshold=rpm)はここで触れず後段へ流す。
+    if "alternator" in (category or "").lower() and "wip" in (category or "").lower():
+        if "voltage desired" in nm:
+            return "V"
+        if "wip limit" in nm:
+            return "×"
+    # レブリミット: スロットルカットの作動回転数は rpm(throttle→% 誤マッチを回避)。
+    # "… ECT Threshold/Hysteresis" は低水温しきい値=°C(rev limit→rpm 誤マッチを回避)。
+    # それ以外(燃料カット回転数・RPMヒステリシス)は rpm。
+    if "rev limit" in nm:
+        if "throttle cut" in nm:
+            return "rpm"
+        if "ect threshold" in nm or "ect hysteresis" in nm:
+            return "°C"
+        return "rpm"
+    # エンジン負荷 上限/最小: 値は負荷(正規化・無単位)。ただし "… - RPM Threshold[/Hysteresis]"
+    # の表自体は回転数しきい値=rpm。"| RPM Below Threshold" は条件ラベルで値は負荷(rpm 誤マッチ回避)。
+    if nm.startswith("load limit") or "load minimum" in nm:
+        return "rpm" if "rpm threshold" in nm else ""
+    # 負荷スケーリング(Load Scaling)は負荷の算出係数/加算で無単位。"… VCT Comp Add" は
+    # 条件が VCT>5° なだけで値は角度ではない(vct→° 誤マッチを回避)。
+    if "load scaling" in nm:
+        return ""
+    # MAF 高負荷補正系: "maf"→g/s に誤マッチするが値は係数/遅延/しきい値。
+    # MAF Scaling 変換(Default/Alternate/Fault)の出力は g/s なので、それらは汎用判定へ流す。
+    if "maf" in nm:
+        if "correction factor" in nm:
+            return "×"
+        if "transition delay" in nm:
+            return "s"
+        if "load threshold" in nm:
+            return ""
+    # APP(アクセル開度)しきい値は常に %。"IPW…Fuel Cut APP Threshold" が ipw→ms に誤マッチ
+    # するのを回避(値はペダル開度%)。他の APP Threshold(無単位・%)も % に統一。
+    if "app threshold" in nm:
+        return "%"
+    # インジェクタ スケーリング(流量倍率)は×。"Injector Offset"(デッドタイム=ms)は別物で、
+    # これには一致しない。offset and scaling→ms に誤マッチするのを回避。
+    if "injector scaling" in nm:
+        return "×"
+    # VVT/VCT(Variable Cam Timing)カテゴリは、カテゴリ名の "cam timing"→° が汎用ループで
+    # "ect"→°C より先に当たる(hay=カテゴリ+名称)。"… ECT Threshold[/Hysteresis]" は作動水温=°C
+    # なので先回りで返す。値がカム角の "VCT Target" 等(ect を含まない)は触れず cam→° に流す。
+    if ("ect threshold" in nm or "ect hysteresis" in nm) and "cam timing" in (category or "").lower():
+        return "°C"
+    # VCT偏差(DO NOT MODIFY)の "VCT Error - RPM Threshold[/Hysteresis]" は切替回転しきい値=rpm。
+    # カテゴリ "cam timing"→° 誤爆を回避。Multiplier/Correction(名は "| Above/Below RPM Threshold"
+    # の条件で RPM Threshold が主語ではない)は別単位なので除外する。
+    if "vct error" in nm and "rpm threshold" in nm and "multiplier" not in nm and "correction" not in nm:
+        return "rpm"
+    # "VCT Error - Correction to Apply …" は OCV制御器への出力補正(値 -600〜400)で、カム角°ではない
+    # (位相器の可動域を大きく超える)。内部制御量のため無単位にする(cam timing→° 誤爆を回避)。
+    if "vct error" in nm and "correction to apply" in nm:
+        return ""
+    # "… Delay … | … Baro …": baro は『|』以降の条件で、値は遅延カウント(気圧ではない)。
+    # 一方 "… - BARO Below Threshold"(|無し, baro が主語=気圧しきい値)は kPa のまま残す。
+    if "delay" in nm and "baro" in nm and "|" in nm and nm.index("baro") > nm.index("|"):
+        return ""
+    # "Load Threshold [| 条件]" は負荷しきい値(値は負荷0〜1=無単位)。条件の High ECT/High Det
+    # 等に惑わされて °C 等にしない。ただし "… ECT Activation Threshold"(値が気温そのもの)は除外。
+    if "load threshold" in nm and "activation threshold" not in nm:
+        return ""
+    # "… Delay Reset Value | <条件>": 遅延がリセットされる値(カウント)で無単位。条件の
+    # ECT/BARO 等に惑わされない。しきい値本体 "Delay Reset - X Threshold" は X の単位のまま。
+    if "delay reset value" in nm:
+        return ""
+    # "… Timer Reset" はタイマ/カウントのリセット値で角度や物理量ではない(spark→° 等の誤爆回避)。
+    # 例: "Spark Transition … - Transition Timer Reset"(値≈0)。Fuel 側 "… Timer Reset"(=60)も無単位。
+    if "timer reset" in nm:
+        return ""
+    # "… Count Required …": 判定成立に必要な回数(カウント)で無単位。"RPM Threshold Count…"
+    # が rpm に誤マッチするのを回避(値は回数であって回転数ではない)。
+    if "count required" in nm:
+        return ""
+    # 推定アイドル回転(Estimated Idle Speed Add/Limiter)は rpm。カテゴリ "Fuel Comp" の
+    # "comp"→% が先に当たるのを回避。"RPM divided by VSS" は比率で無単位。
+    # "… Corrective Divisor" は除数(カテゴリ "Comp"→% が誤爆)。無単位。Multiplier は別途 ×。
+    if "corrective divisor" in nm:
+        return ""
+    # STFT 移行遅延(STFT Transition Delay)は遅延カウント/時間で % ではない("comp"→% 回避)。
+    if "stft" in nm and "transition delay" in nm:
+        return ""
+    # STFT 補正係数(STFT Correction … Coefficient)は無次元ゲインで % ではない。
+    if "stft" in nm and "coefficient" in nm:
+        return ""
+    # 閉ループへの移行(Transition to CL): Delay=遅延(無単位)、Eq Ratio Delta=当量比差(無次元)、
+    # Fuel Enrich/Enlean Limit=燃料% 。カテゴリ "Comp"→% の誤爆を分岐で正す。
+    if "transition to cl" in nm:
+        if "delay" in nm:
+            return ""
+        if "eq ratio" in nm:
+            return ""
+        return "%"
+    # LTFT: Accumulation Timer=タイマ(無単位)、EQ Ratio …Delta=当量比差(無次元)。
+    # 最大/最小/STFT Range 等の % は comp→% のまま正しいので触らない。
+    if "ltft" in nm:
+        if "accumulation timer" in nm:
+            return ""
+        if "eq ratio" in nm:
+            return ""
+    # MAF 区切り値(MAF Breakpoint)とそのヒステリシスは吸入空気量 g/s("comp"→% を回避)。
+    if "maf breakpoint" in nm:
+        return "g/s"
+    # "… MAF Threshold" は吸入空気量のしきい値 g/s(comp→% 回避)。
+    if "maf threshold" in nm:
+        return "g/s"
+    # 負荷デルタしきい値は負荷(無次元)、VSSしきい値は車速(km/h)、Activation Delay は遅延。
+    # いずれも Fuel Comp の comp→% で誤って % になるのを回避。
+    if "load delta threshold" in nm:
+        return ""
+    # VSSしきい値は車速(km/h)。ただし "… Spark Idle Load - VSS Comp" の
+    # "VSS Comp | Above/Below VSS Threshold" は“値”が速度ではない内部カーブなので除外し、
+    # 後段の spark idle load - vss 判定(無単位)に委ねる。
+    if "vss threshold" in nm and "spark idle load" not in (category or "").lower():
+        return "km/h"
+    if "activation delay" in nm:
+        return ""
+    # コードパッチのトグル(名前に "unpatched = X, patched = Y")はコード値で無単位。
+    # 例: "Fuel Target CL Patch | unpatched = 36647, patched = 9"(λ 誤表示を回避)。
+    if "unpatched" in nm:
+        return ""
+    if "estimated idle speed" in nm:
+        return "rpm"
+    # Idle Speed Comp の "Start-up Base / Base Limit" はアイドル回転の加算量/上限=rpm("comp"→%回避)。
+    # Multiplier は上の分岐で ×。"Post Start-up …"(減衰レート)は別物なので除外。
+    if "idle speed comp" in nm and "start-up base" in nm and "post" not in nm:
+        return "rpm"
+    # Idle Speed Comp の減衰レート(Decrement Rate)はアイドル回転(rpm)を減らす量/周期。
+    if "idle speed comp" in nm and "decrement rate" in nm:
+        return "rpm"
+    if "rpm divided by vss" in nm:
+        return ""
+    # スロットル角度(Throttle Angle)は物理ブレード角=度(°)。ただし "…Multiplier" は倍率(×)。
+    # 例: Throttle Angle - Maximum=85°、Throttle Percentage to Throttle Angle Multiplier=0.85×。
+    if "throttle angle" in nm:
+        return "×" if ("multiplier" in nm or " mult" in nm) else "°"
+    # スロットルデューティ指令/目標系は常に %。名前に "torque request" を含む
+    # "…(Bypass Torque Request)" 行も、実体はデューティ% なのでここで先取りする
+    # (汎用ルールでは "torque"→N·m が "duty"→% より先に当たってしまうため)。
+    if "throttle duty" in nm:
+        return "%"
+    # トルク要求(Torque Request)系: この個体では BMEP(平均有効圧 kPa)や倍率で表現され N·m ではない。
+    # 定義名に "...in kpa"(Brake Mean Effective Pressure)や "Multiplier" が入る。
+    # 別系統の "Requested Torque …"(実トルク N·m しきい値)は語順が違い一致しない。
+    if "torque request" in nm:
+        if "multiplier" in nm or " mult" in nm:
+            return "×"
+        if "kpa" in nm or "brake mean effective" in nm or "bmep" in nm:
+            return "kPa"
+        return "N·m"
+    # 「…Multiplier」は倍率(×)。乗算係数に物理単位は無いので、fuel target(λ)/afr/温度 等の
+    # キーワードより優先する(例: 触媒温度推定の Multiplier|AFR Lean/Rich、暖機燃料の各 Multiplier)。
+    if "multiplier" in nm:
+        return "×"
+    # 点火アイドル補正(特殊暖機WIP)の "Spark Idle Correction … Target" 一族は、進角補正の
+    # 目標値およびその増減レート(°)。"… Warm-Up Fuel Target" も実体は進角補正目標(値0〜18°)で、
+    # 直後の warm+fuel target→"" や 汎用 fuel target→λ に誤爆するためここで先取りする。
+    # "… Target Multiplier"(倍率×)は除外して後段の multiplier 判定へ流す。
+    if "spark idle correction" in nm and "target" in nm and "multiplier" not in nm:
+        return "°"
+    # 暖機時 目標空燃比(Warm-Up Fuel Target)系の非倍率テーブルは、増量“量”/上限/減衰率で
+    # あって絶対λではない(値 0〜60/0〜100/0.27 等=実λ 0.7〜1.4 の範囲外)。λ 誤表示を回避。
+    # (倍率 Multiplier は直前の分岐で既に × 判定済み)
+    if "warm" in nm and "fuel target" in nm:
+        return ""
+    # 目標空燃比(開ループ)Fuel Target OL は、絶対λではなく『ストイキに対する増量%』
+    # (値 0〜36 等、0=ストイキ)。λ 誤表示を回避。閉ループ CL はベース=実λ/Stoich=AFR で別途正しい。
+    if "fuel target ol" in nm:
+        return "%"
+    # 点火ベース 高燃料要求への移行(Spark Base - High Fuel Request Transition)系:
+    # 燃料要求レベルの切替しきい値/ヒステリシス/遅延で、点火進角(°)ではない。
+    # カテゴリ名の "spark"→° が誤爆するため名前で先取りする。名前に単位が明記されている:
+    #   "(Lambda)"→λ、"(%)"→%。"Transition Delay" は遅延カウントで無単位。
+    # 実際の進角マップ(High/Low Fuel Request / Spark Base Limit)は threshold/hysteresis/
+    # delay を名前に含まず不一致なので、それらは従来どおり ° のまま。
+    if "fuel request" in nm and (
+        "threshold" in nm or "hysteresis" in nm or "delay" in nm
+    ):
+        if "lambda" in nm:
+            return "λ"
+        if "(%)" in nm or "hysteresis" in nm:
+            return "%"
+        return ""            # 移行遅延カウント / 単位未明記のしきい値
+    # 点火アイドル負荷(Spark Idle Load)系: アイドル制御が狙う“エンジン負荷”の基準/補正で、
+    # 値は負荷(0〜1 正規化・無単位)。名前/カテゴリの "spark"→° 誤爆を回避する。
+    #   ・"Spark Idle Load - Base"(名前) = 基準負荷(0.135〜0.5)
+    #   ・カテゴリ "… Spark Idle Load - AC Comp" = A/Cコンプレッサ分の負荷加算(0.02〜0.085)。
+    #     名前は "AC Comp Base | …" で "spark idle load" を含まないためカテゴリで判定する。
+    # 他の補正カテゴリ(VSS=km/h, PSP/Alt=× や他単位が混在)はここでは扱わない。
+    _cat = (category or "").lower()
+    if "spark idle load" in nm or "spark idle load - ac comp" in _cat:
+        return ""
+    # パワステ補正(Spark Idle Load - PSP Comp/Compensation): 計算用の分子/除数定数は無単位。
+    # カテゴリの "spark"→° 誤爆を回避。ただし "… Multiplier"(二次係数)は倍率×なので除外する
+    # (Multiplier は後段の "multiplier"→× 判定に流す)。
+    if "spark idle load - psp" in _cat and "multiplier" not in nm:
+        return ""
+    # オルタネータ補正(Spark Idle Load - Alternator Comp/Compensation): カテゴリの "spark"→°、
+    # 名前中の "duty"→% が誤爆する。実体は:
+    #   ・"Alternator to Estimated MAF Add" = 推定エアフロへの加算(g/s、値0〜2.2=アイドル域airflow)
+    #   ・その他(負荷加算 Base、Decrement Rate、Delta Hysteresis)= 無単位
+    # Multiplier があれば × に流す(現状このカテゴリに該当なし)。
+    if "spark idle load - alt" in _cat and "multiplier" not in nm:
+        if "estimated maf" in nm:
+            return "g/s"
+        return ""
+    # 車速補正(Spark Idle Load - VSS Comp): カテゴリの "spark"→°、名前中 "vss"→km/h が誤爆。
+    # 実体はアイドル負荷の補正/内部カーブ(値は負荷・内部量で無単位)。X軸が車速(km/h)や回転数で
+    # あっても“値”は速度ではない。"… Multiplier"(×)は後段へ流して温存する。
+    #   ・"VSS Comp | In-Gear, MT"(X=車速)=停車付近の負荷加算(0.1→0)
+    #   ・"VSS Comp Sub | In-Gear, MT"(X=回転数)=微小サブ項
+    #   ・"VSS Comp | Above/Below VSS Threshold (5kph), AT"(X=未使用)=内部カーブ(0〜31, 単位未確定)
+    if "spark idle load - vss" in _cat and "multiplier" not in nm:
+        return ""
+    # 点火ベース/アイドル移行(Spark Base / Idle Transition): カテゴリの "spark"→° が誤爆する。
+    # 実体は点火マップ(アイドル用/走行ベース)を切替える条件で、進角°ではない。
+    #   ・"… RPM Threshold" = 切替回転数(rpm、ヒステリシス 4500↑/4000↓)
+    #   ・"… Fuel Start-Up Enrichment Threshold" = 始動時増量(%)の残量しきい値
+    if "transition to spark base" in nm or "transition to idle" in nm:
+        if "rpm threshold" in nm:
+            return "rpm"
+        if "enrichment threshold" in nm:
+            return "%"
+        return ""
+    # 点火アイドル補正(AC/PS断続切替)の "… - Duration …" は補正の適用保持時間/カウントで、
+    # 角度(°)ではない。カテゴリ "spark"→° 誤爆を回避(単位の確定は不能なので無単位)。
+    # 同族の "… - Value …" は進角補正°なので触れない(duration のみ対象)。
+    if "spark idle" in nm and "duration" in nm:
+        return ""
+    # 急開アンチラグ(Tip-In Anti Lug)の "Minimum RPM Threshold …" は作動回転しきい値=rpm。
+    # カテゴリ "spark"→° 誤爆を回避。anti lug 限定(他の rpm threshold には波及させない)。
+    if "anti lug" in nm and "rpm threshold" in nm:
+        return "rpm"
+    # 急開(高速)Tip-In Retard High Speed: カテゴリ "spark"→° が誤爆する。実体は混在:
+    #   ・"… Delay | Gear …"(uint8)= 遅延カウント(無単位、角度ではない)
+    #   ・"… APP Increasing/Decreasing | AT"(float, max1.3, 〜1.0収束)= ペダル増減別の倍率×
+    #   ・"… Base Retard …" = ベース遅角°(後段へ流す)/"… Multiplier …" は後段 "multiplier"→×。
+    if "tip-in retard high speed" in nm:
+        if "delay" in nm:
+            return ""
+        if "app increasing" in nm or "app decreasing" in nm:
+            return "×"
+        # Base Retard=°、ZEROED Multiplier=× は後段の既定判定へ流す
+    # 冷間進角(Spark Comp - Cold Advance): カテゴリ "spark"→° 誤爆。進角量/加算マップ/レートは
+    # ° でよいが、"… Add Timer"(加算進角の保持タイマ)はカウント/時間で角度ではない→無単位。
+    # "… Add Retard Rate | Timer Expired" は °/周期のレートなので除外し ° のまま後段へ流す。
+    if "cold advance" in nm and "add timer" in nm:
+        return ""
+    # ノックリタード(Spark Correction - Knock Retard): カテゴリ "spark"→° が誤爆する。
+    # KR(Knock Retard=ノック遅角)の量・最大・増減レートは進角°(そのまま後段へ)。一方、
+    # Knock Listen のしきい値と各種 Delay は別単位:
+    #   ・"… Load …"(Minimum Load / Hysteresis)= 負荷(無単位)
+    #   ・"… RPM …"(Min/Max RPM / Hysteresis)= rpm
+    #   ・"… Delay …"(Exit Delay / KR Reduction Delay)= 遅延カウント(無単位)
+    if "knock retard" in (category or "").lower():
+        if "load" in nm:
+            return ""
+        if "rpm" in nm:
+            return "rpm"
+        if "delay" in nm:
+            return ""
+        # それ以外(KR量/最大/増減レート/Minimum KR 等)は ° のまま後段へ流す
+    # 点火補正 高回転・高水温遅角(Spark Correction - High RPM and ECT): カテゴリ "spark"→° 誤爆。
+    # しきい値は各物理量: RPM Threshold[/Hysteresis]=rpm、ECT Threshold[/Hysteresis]=°C。
+    # Retard Rate / Retard Limit / Restore Advance Rate は進角°なので後段へ流す(ここでは触れない)。
+    # Activation Delay は手前の "activation delay"→"" で既に処理済み。
+    if "high rpm and ect retard" in nm:
+        if "rpm threshold" in nm:
+            return "rpm"
+        if "ect threshold" in nm:
+            return "°C"
+    # 点火補正増量(Corrective Spark Enrichment)系: カテゴリ名の "spark"→° が誤爆する。
+    # しきい値は各物理量(RPM=rpm, Cat Temp=°C, Load=無単位)、増量量(|OL 等)=%。
+    if "corrective spark enrichment" in nm:
+        if "rpm thre" in nm:                 # "RPM Threshold"/typo "RPM Threhold"
+            return "rpm"
+        if "temperature" in nm:
+            return "°C"
+        if "load threshold" in nm:
+            return ""
+        return "%"
+    # 高負荷リーン化(Power Enleanment)系: "enleanment"→% が greedy で、しきい値まで % にする。
+    # しきい値は各物理量(VSS=km/h, ECT=°C, RPM=rpm, Load=無単位)、リーン化量/レートは %。
+    if "power enleanment" in nm:
+        # "Power Comp - … Advance / Retard … | Fuel Power Enleanment Set/Clear"(点火ベース上限
+        # 補正・高負荷)は進角°。ここでの "power enleanment" は '|' 以降の条件フラグで、値は点火
+        # 進角そのもの。本物の燃料リーン化テーブルは advance/retard を名前に含まず不一致。
+        if "advance" in nm or "retard" in nm:
+            return "°"
+        if "vss" in nm:
+            return "km/h"
+        if "iat threshold" in nm or "ect threshold" in nm:
+            return "°C"
+        if "rpm threshold" in nm:
+            return "rpm"
+        if "load threshold" in nm:
+            return ""
+        if "timer" in nm:
+            return ""                 # タイマ/遅延(カウント・時間で % ではない)
+        return "%"                    # リーン化量/レート、TP・APP しきい値(%)
+    # EVAPCP(EVAPキャニスタパージ)のベース/加算/マップはパージ量の内部値で物理単位なし。
+    # "…Voltage Add" は電圧軸に対する補正量であって電圧値ではない(V 誤表示を防ぐ)。
+    if "evapcp" in nm:
+        return ""
+    # 電動ファン制御: 「… Speed」(低速/中速/高速=ファン段)が "speed"→km/h に誤マッチする。
+    # タイマ=秒、選択=リレー選択ビットマスク(無単位)、速度遷移遅延=秒。
+    # VSS しきい値(→km/h)と ECT しきい値(→°C)は汎用判定に任せる。
+    if "fan" in nm:
+        if "timer" in nm:
+            return "s"
+        if "selection" in nm:
+            return ""
+        if ("transition" in nm or "delay" in nm) and "vss" not in nm:
+            return "s"
     hay = f"{category or ''} {name or ''}".lower()
+    # 短い略語("ect"/"iat")は単語境界で判定する。部分一致だと corrECTion / selECTion /
+    # detECTed / corrECTed などに誤マッチして誤って °C になるため(28テーブルで誤判定していた)。
+    _boundary = {"ect", "iat"}
     for kw, u in _UNIT_RULES:
-        if kw in hay:
+        if kw in _boundary:
+            if _re.search(r"\b" + kw + r"\b", hay):
+                return u
+        elif kw in hay:
             return u
     return ""
 
@@ -820,6 +1251,28 @@ UI = {
     "effect": ("値を変えると", "Effect of change"),
     "trusted": ("✓ 定義は LibreTuner(この個体CALID用)。次元・アドレスは検証済み。",
                 "✓ LibreTuner definition (this CAL ID). Dimensions/addresses verified."),
+    "axis_edit_off": ("軸編集 OFF", "Edit Axes: OFF"),
+    "axis_edit_on": ("軸編集 ON", "Edit Axes: ON"),
+    "axis_edit_warn_title": ("軸ブレークポイント編集", "Edit axis breakpoints"),
+    "axis_edit_warn": (
+        "軸(ブレークポイント)の値を編集できるようにします。\n\n"
+        "・純正ECUでは点数は固定です。値のみ編集でき、点の増減はできません。\n"
+        "・値は昇順(単調増加)を保ってください。逆転・重複は補間を壊します。\n"
+        "・保存時にチェックサムは自動補正されます。\n"
+        "・実機書き込み前に必ず吸い出しダンプを保管してください。\n\n"
+        "軸編集を有効にしますか?",
+        "This lets you edit axis (breakpoint) values.\n\n"
+        "- On a factory ECU the number of points is fixed. You can edit values only, "
+        "not add/remove points.\n"
+        "- Keep values strictly ascending. Reversed/duplicate values break interpolation.\n"
+        "- Checksums are corrected automatically on save.\n"
+        "- Always keep your read-out dump before flashing.\n\n"
+        "Enable axis editing?"),
+    "axis_mono_title": ("軸の値エラー", "Axis value error"),
+    "axis_mono_msg": ("軸の値は昇順(単調増加)でなければなりません。\n"
+                      "隣接値: 左={lo} / 右={hi}\n入力値 {v} は範囲外です。元に戻します。",
+                      "Axis values must be strictly ascending.\n"
+                      "Neighbors: left={lo} / right={hi}\nValue {v} is out of range. Reverting."),
 }
 
 
