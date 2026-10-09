@@ -19,6 +19,7 @@ defs/*.xml
 # ルート直下の生成PDF重複(正本は docs/ 側)
 /github_publish_guide.pdf
 /map_editor_manual.pdf
+/map_editor_manual_EN.pdf
 
 # === ログ・キャプチャ・個人設定 ===
 logs/
