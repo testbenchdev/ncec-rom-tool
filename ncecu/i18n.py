@@ -354,6 +354,7 @@ CATEGORY_JA_LT = {
     "Intake Manifold Runner Control (AT Only)": "可変吸気ランナー制御 IMRC(AT限定)",
     "Intake Manifold Tuning Valve": "可変吸気バルブ(IMTV)",
     "Patch - Decel Fuel Cutoff": "パッチ - 減速燃料カットの無効化",
+    "Patch - Flat Shift Ignition Retard": "パッチ - フラットシフト（点火リタード）",
     "Patch - Engine Displacement": "パッチ - 排気量設定",
     "Patch - Immobilizer Disable": "パッチ - イモビライザー無効化",
     "Patch - Open Loop Short Term Fuel Trim Fix": "パッチ - 開ループ短期補正の修正",
@@ -414,6 +415,9 @@ def translate_category(en: str) -> str:
 
 # ---- テーブル名(ツリー小項目)の用語訳。カテゴリ用語+名称固有の語を最長一致で置換 ----
 _NAME_EXTRA = {
+    # フラットシフト関連の追加項目(ncecu/flatshift.py)
+    "Flat Shift Retard": "フラットシフト点火リタード", "Retard Amount": "リタード量",
+    "Vehicle Speed Minimum": "車速下限", "Vehicle Speed": "車速", "Throttle Cut": "スロットルカット",
     # 条件・状態(句を優先)
     "4th, 5th, 6th Gear": "4/5/6速", "First Gear": "1速", "1st Gear": "1速",
     "2nd Gear": "2速", "3rd Gear": "3速", "High-Det": "高ノック検出",
@@ -593,6 +597,7 @@ CATEGORY_DESC = {
     "Variable Cam Timing - Base": "可変バルブタイミング(VCT)の目標角度マップ。トルク特性に影響。",
     "Vehicle Instrument Cluster - CEL Warning": "メーターのチェックランプ(CEL)警告表示の制御。",
     "Vehicle Instrument Cluster - ECT Gauge": "水温計の表示特性(実温度→針位置)。水温計の張り付き調整等。",
+    "Patch - Flat Shift Ignition Retard": "フラットシフト用の点火リタード・パッチ(第3ドラフト)の定数。クラッチ踏込・アクセル開度>しきい値・回転>しきい値・車速>下限がすべて成立した間だけ、最終進角からリタード量を引く(純正の最大リタードで下限制限)。パッチ適用済みROMでのみ表示。ベンチ検証用ドラフト。",
     "Vehicle Instrument Cluster - Speedometer": "スピードメーターの表示特性。タイヤ外径変更時の補正等。",
 }
 
@@ -687,13 +692,65 @@ EN_GROUP_EFFECT = {
 }
 
 
+# 英語モードのカテゴリ個別解説/効果(グループより優先)
+EN_CATEGORY_DESC = {
+    "Patch - Flat Shift Ignition Retard": (
+        "Constants of the flat-shift ignition-retard patch (draft 3). While the clutch is pressed AND "
+        "APP > threshold AND RPM > threshold AND vehicle speed > minimum, the retard amount is "
+        "subtracted from the final spark advance (floored by the stock max-retard limit). Shown only "
+        "for ROMs with the patch applied. Draft for bench validation."),
+}
+EN_CATEGORY_EFFECT = {
+    "Patch - Flat Shift Ignition Retard": (
+        "More retard = bigger torque drop during the shift (less flare) but hotter exhaust. "
+        "Lower RPM threshold = acts earlier. Lower APP threshold = triggers on partial throttle "
+        "(more false triggers). Higher speed minimum = inactive at low speed."),
+}
+
+# 定義に無い追加項目(ncecu/flatshift.py)の説明: 番地 -> (日本語, 英語)
+EXTRA_DESC = {
+    0xC53B8: ("車速がこの値[km/h]未満のときだけ、クラッチ踏込時に『レブリミット スロットルカット | クラッチ踏込』"
+              "(@0x0C53BC)が使われる(純正2.0=停車中のみ)。それ以上の車速では CPP clear(10000rpm)側になる。",
+              "The 'Rev Limit Throttle Cut | CPP set' (@0x0C53BC) applies with the clutch pressed only "
+              "below this vehicle speed [km/h] (stock 2.0 = standstill only). Above it the CPP clear "
+              "limit (10000 rpm) is used."),
+    0xC53C4: ("スロットルカット成立中は、回転が『リミット−この値』を下回るまで解除しない(純正100rpm)。",
+              "Once active, the throttle cut stays until RPM falls below the limit minus this value "
+              "(stock 100 rpm)."),
+    0xDE260: ("アクセル開度がこの値[%]を超えていること。0〜100。", "APP must exceed this value [%]. 0-100."),
+    0xDE264: ("エンジン回転がこの値[rpm]を超えている間リタードする(ソフトリミッタ)。3000〜7500。",
+              "Retard while RPM is above this value [rpm] (soft limiter). 3000-7500."),
+    0xDE268: ("車速がこの値[km/h]を超えていること。停車中(ローンチ側)と分ける。0〜250。",
+              "Vehicle speed must exceed this value [km/h], to separate from standstill/launch. 0-250."),
+    0xDE26C: ("最終進角から引く量[°]。純正の最大リタードで下限制限される。0〜30。",
+              "Degrees subtracted from the final spark advance (floored by the stock max retard). 0-30."),
+}
+# 追加項目の単位(名前からの推定より優先)
+EXACT_UNITS = {
+    "Rev Limit Throttle Cut | CPP set - Vehicle Speed Threshold": "km/h",
+    "Rev Limit Throttle Cut | CPP set - Hysteresis": "rpm",
+    "Flat Shift Retard - APP Threshold": "%",
+    "Flat Shift Retard - RPM Threshold": "rpm",
+    "Flat Shift Retard - Vehicle Speed Minimum": "km/h",
+    "Flat Shift Retard - Retard Amount": "°",
+}
+
+
+def table_desc(t) -> str:
+    """テーブル固有の説明。追加項目は現在言語の説明、それ以外は定義由来の desc。"""
+    d = EXTRA_DESC.get(getattr(t, "address", None))
+    if d and not getattr(t, "desc", ""):
+        return d[1] if _LANG == "en" else d[0]
+    return getattr(t, "desc", "") or ""
+
+
 def describe_category(en: str) -> str:
     if en is None:
         return ""
     s = en.strip()
     g = _group_of(s)
     if _LANG == "en":
-        return EN_GROUP_DESC.get(g, "")
+        return EN_CATEGORY_DESC.get(s) or EN_GROUP_DESC.get(g, "")
     if s in CATEGORY_DESC:
         return CATEGORY_DESC[s]
     if g in GROUP_DESC:
@@ -835,6 +892,8 @@ _UNIT_RULES = [
 
 def unit_of(category: str, name: str = "") -> str:
     """調整値の単位を推定(定義に単位が無いためキーワードから)。不明は空。"""
+    if name in EXACT_UNITS:
+        return EXACT_UNITS[name]
     nm = (name or "").lower()
     # 推定体積流量(Estimated Volumetric Flow)系はデータの意味が名前で決まる。
     # カテゴリに "throttle duty" が入り % に誤判定されるため、名前で先に判定する。
@@ -1268,6 +1327,37 @@ UI = {
         "- Checksums are corrected automatically on save.\n"
         "- Always keep your read-out dump before flashing.\n\n"
         "Enable axis editing?"),
+    "fs_patch": ("点火リタード", "Flat-shift retard"),
+    "fs_title": ("フラットシフト点火リタード", "Flat-shift ignition retard"),
+    "fs_confirm": (
+        "このROMにフラットシフト用の点火リタード・パッチ(第3ドラフト)を当てます。\n\n"
+        "・点火制御を書き換えるコードパッチです。ベンチ検証用のドラフトで、実機では未検証です。\n"
+        "・発動条件: クラッチ踏込 かつ アクセル開度>{app:g}% かつ 回転>{rpm:g}rpm かつ 車速>{vss:g}km/h\n"
+        "・発動中は最終進角から {retard:g}° 引きます(純正の最大リタードで下限制限)。\n"
+        "・値は適用後に左のツリー『パッチ - フラットシフト（点火リタード）』で変更できます。\n"
+        "・メモリ上のROMだけを変更します。保存するまでファイルは変わりません(保存時にチェックサム自動補正)。\n"
+        "・書き込みは予備/ベンチECUで。元のROMは必ず保管してください。\n\n"
+        "適用しますか?",
+        "Apply the flat-shift ignition-retard patch (draft 3) to this ROM?\n\n"
+        "- This is a code patch to ignition control. Draft for bench validation; not yet tested on hardware.\n"
+        "- Trigger: clutch pressed AND APP > {app:g}% AND RPM > {rpm:g} rpm AND speed > {vss:g} km/h\n"
+        "- While active, {retard:g} deg is subtracted from the final advance (floored by stock max retard).\n"
+        "- Values can be changed afterwards under 'Patch - Flat Shift Ignition Retard' in the tree.\n"
+        "- Only the ROM in memory is changed; the file is untouched until you save "
+        "(checksums are corrected on save).\n"
+        "- Flash a spare/bench ECU and keep your original ROM.\n\n"
+        "Apply?"),
+    "fs_done": ("パッチを適用しました(未保存)。左のツリーの『パッチ - フラットシフト（点火リタード）』で値を変更できます。",
+                "Patch applied (not saved yet). Edit the values under 'Patch - Flat Shift Ignition Retard'."),
+    "fs_already": ("このROMには既にパッチが当たっています。左のツリーの『パッチ - フラットシフト（点火リタード）』で値を変更できます。",
+                   "This ROM already has the patch. Edit the values under 'Patch - Flat Shift Ignition Retard'."),
+    "fs_unsupported": ("このROMには適用できません(未対応ROM、または別のパッチと衝突しています)。\n{err}",
+                       "Cannot apply to this ROM (unsupported, or conflicts with another patch).\n{err}"),
+    "range_title": ("入力値エラー", "Value error"),
+    "extra_note": ("✓ 追加項目(LibreTuner定義には無い。ncecu/flatshift.py で定義)。番地と意味は逆アセンブル＋エミュレータで確認済み。範囲外の入力は受け付けません。",
+                   "✓ Extra item (not in the LibreTuner definition; defined in ncecu/flatshift.py). Address and meaning verified by disassembly + emulator. Out-of-range input is rejected."),
+    "range_msg": ("この項目は {lo:g}〜{hi:g} の範囲で入力してください。入力値 {v:g} は範囲外です。元に戻します。",
+                  "This item accepts {lo:g} to {hi:g}. Value {v:g} is out of range. Reverting."),
     "axis_mono_title": ("軸の値エラー", "Axis value error"),
     "axis_mono_msg": ("軸の値は昇順(単調増加)でなければなりません。\n"
                       "隣接値: 左={lo} / 右={hi}\n入力値 {v} は範囲外です。元に戻します。",
@@ -1317,6 +1407,7 @@ CATEGORY_EFFECT = {
     "Vehicle Instrument Cluster - ECT Gauge": "水温計の針の表示特性。実際の水温や制御は変わりません(見た目のみ)。",
     "Patch - Immobilizer": "イモビライザー(盗難防止)のバイパス設定。中古ECU流用時に『patched』値へ変えると照合を無効化できます。取扱注意・自己責任。",
     "Patch - Decel Fuel Cut Off": "減速燃料カットの改変。",
+    "Patch - Flat Shift Ignition Retard": "リタード量↑=シフト中のトルク低下が大きい(回転の吹け上がりを抑える)が排気温度↑。回転しきい値↓=早めに効く。アクセル開度しきい値↓=浅い踏み込みでも発動(誤作動リスク↑)。車速下限↑=低速では効かない。",
     "Patch - Open Loop Short Term Fuel Trim Fix": "開ループ短期補正の修正パッチ。",
 }
 
@@ -1359,7 +1450,7 @@ def effect_of(en: str) -> str:
     s = en.strip()
     g = _group_of(s)
     if _LANG == "en":
-        return EN_GROUP_EFFECT.get(g, _EFFECT_FALLBACK_EN)
+        return EN_CATEGORY_EFFECT.get(s) or EN_GROUP_EFFECT.get(g, _EFFECT_FALLBACK_EN)
     if s in CATEGORY_EFFECT:
         return CATEGORY_EFFECT[s]
     if g in GROUP_EFFECT:

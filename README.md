@@ -1,9 +1,12 @@
-# NCEC ROM Map Editor
+# NCEC ROM Tool
 
-An open-source **read / edit / compare / live-monitor** tool for the factory ECU of the
-**Mazda MX-5 NC (chassis NCEC, LF-VE engine, Denso / Renesas SH7058 PCM)**.
+An open-source **read / edit / compare / flash / live-monitor** tool for the factory ECU of the
+**Mazda MX-5 NC (chassis NCEC, LF-VE engine, Denso 279700-4073 / Renesas SH7058 PCM, CAL ID LFG7EG)**.
 A hobby / learning project aiming at a LinkECU- or Haltech-style native-reflash tuning
 environment for the stock ECU.
+
+Current version: **1.30** (`VERSION`; change history in `CHANGELOG_ja.md`, Japanese).
+日本語版: [README_ja.md](README_ja.md)
 
 ---
 
@@ -14,11 +17,12 @@ environment for the stock ECU.
 - Modifying an ECU can **destroy the engine, cause a fire, or leave the car undriveable.**
   Do not change ignition timing, fuel targets, limiters, electronic-throttle or torque
   tables unless you understand them.
-- **Strongly recommended to work on a spare / bench ECU.** Compliance with road-use and
-  emissions regulations is the user's responsibility — **defeating emissions controls on a
-  road vehicle is illegal in most jurisdictions.**
-- This repository **does not contain any ECU firmware (ROM image)** — that is Mazda's
-  copyrighted work. Supply a dump read from your own ECU.
+- **Strongly recommended to work on a spare / bench ECU.** Keep your original read-out.
+  Do not cut power while flashing (about 10 minutes).
+- Compliance with road-use and emissions regulations is the user's responsibility —
+  **defeating emissions controls on a road vehicle is illegal in most jurisdictions.**
+- This repository **does not contain any ECU firmware (ROM image), SBL, or the Renesas manual.**
+  Supply a dump read from your own ECU.
 
 ---
 
@@ -26,27 +30,43 @@ environment for the stock ECU.
 
 | Feature | State |
 |---|---|
-| Load ROM, edit maps by category, JA / EN UI toggle | ✅ |
+| Load ROM, edit maps by category (LibreTuner definition, 909 tables), JA / EN UI | ✅ |
 | Checksum auto-correction on save | ✅ |
-| Live monitoring (OBD-II) + active-cell tracking + dashboard | ✅ |
-| ECU read-out (Mode 23) / ECU↔ROM and ROM↔ROM compare | ✅ |
-| Auto-generated PDF manual (all maps + interactions) | ✅ |
-| **Flashing (writing to the ECU)** | ⚠️ **Pending an SBL** (see below) |
+| ECU read-out (UDS 0x23, no SBL needed) / ECU↔ROM and ROM↔ROM compare | ✅ |
+| **Flashing over CAN** (SBL model) | ✅ Verified on a bench ECU and in the car via the OBD-II port — **SBL not included; you must supply it** |
+| Live monitoring (OBD-II Mode 01, >10 Hz) + DTCs + active-cell tracking on maps | ✅ |
+| Dashboard (gauge tiles), logging and replay | ✅ |
+| Auto-generated PDF manual / full map analysis (JA / EN) | ✅ |
+| **Flat-shift ignition-retard patch** (draft 3, apply and edit in the editor) | ⚠️ Emulator-verified only, **not yet tested on hardware** |
 
-### About flashing
-Writing this ECU requires an **SBL (Secondary Boot Loader)**. The authentication, sequence,
-checksum handling and block length are all implemented and bench-verified — the host side is
-**ready to flash once an SBL is supplied**. No public tool ships the SBL (each keeps it
-private). Because the SBL is transmitted in the clear over CAN during a flash, it can be
-extracted from an **NC1 flash-session `candump`**. Captures / pointers are very welcome —
-please open an Issue or Discussion.
+### Flashing
+Writing this ECU requires an **SBL (Secondary Boot Loader)** for NC1 (flash start 0x2000, 0x1800 bytes).
+The authentication, sequence (`10 85` → `27` → `B1 00 B2 00` → RequestDownload 0x8000/0xFF800 →
+SBL + program → TransferExit → reset), checksum handling and block length are implemented and
+hardware-verified. **No SBL is distributed with this project.** The editor's **ECU書き込み (ECU Write)** button
+looks for `Decryption_sbl/sbl_nc1_flash_0x2000.bin` by default; the CLI is
+`tools/flash_writeback.py` (dry run unless `--confirm`).
+
+### Flat shift (no-lift shift)
+- The stock clutch-gated throttle cut (`@0x0C53BC`, 6500 rpm) only works **below 2 km/h**
+  (`@0x0C53B8`). It acts as a standstill free-rev / launch limiter, **not** as a flat shift while driving.
+  (The v1.10 notes claimed otherwise; corrected in v1.20.)
+- The **ignition-retard patch** (`ncecu/flatshift.py`, draft 3) subtracts a retard from the final spark
+  advance — before the stock max-retard clamp — while the clutch is pressed AND APP > threshold AND
+  RPM > threshold AND vehicle speed > minimum. The throttle stays open while driving.
+  Defaults: 80 % / 7000 rpm / 10 km/h / 20°.
+- Apply it with the editor's **Flat-shift retard** button, or `tools/patch_flatshift_retard.py`.
+  The four values then appear in the tree under **Patch - Flat Shift Ignition Retard**
+  (out-of-range input is rejected). Details: `docs/tuning_flatshift_ja.md` (Japanese).
+- It changes ignition control and raises exhaust temperature. **Validate on a bench ECU first**
+  (timing light, or live timing advance PID 0x0E).
 
 ---
 
 ## Requirements
 
 - Python 3.11+ (developed on 3.14 / Windows 11)
-- CAN adapter: **gs_usb family (candleLight, etc.)**, 500 kbps
+- CAN adapter: **gs_usb family (candleLight, e.g. DSD TECH SH-C30L)**, 500 kbps, WinUSB driver via Zadig
 - Dependencies: `pip install -r requirements.txt`
 - GUI uses Python's built-in tkinter.
 
@@ -56,12 +76,15 @@ bundled** here for licensing clarity. Download them and place `main.json` plus y
 `<CALID>.json` (e.g. `LFG7EG.json`) into `defs/libretuner/`:
 - https://github.com/LibreTuner/LibreTuner (`ui/resources/definitions/mx5_nc/`)
 
+A few constants missing from that definition (the flat-shift items above) are defined in
+`ncecu/flatshift.py` and shown by the editor as extra items.
+
 ---
 
 ## Install
 
 ```bash
-git clone https://github.com/<yourname>/ncec-rom-tool.git
+git clone https://github.com/testbenchdev/ncec-rom-tool.git
 cd ncec-rom-tool
 pip install -r requirements.txt
 # Put the LibreTuner mx5_nc definitions into defs/libretuner/ (see above)
@@ -73,12 +96,24 @@ python ncec_editor.py
 1. **Open ROM** — load your dump (`.bin`, 1 MB).
 2. Pick a map in the left tree, edit cells (press Enter). Checksums are corrected on save.
 3. **Live ▶** — connect to the running ECU (OBD-II / CAN) for live monitoring;
-   **Dashboard** shows large value tiles.
+   **Dashboard** shows gauge tiles; **記録 ● (Record)** / **リプレイ (Replay)** for logs.
 4. **Read ECU** to dump the ECU; **Compare ECU** / **Compare ROMs** for diffs.
-5. Toggle **JA / EN** with the language button.
-6. `python tools/gen_manual.py` generates a full PDF manual of every map.
+5. **ECU書き込み (ECU Write)** to flash (spare / bench ECU recommended; SBL required).
+6. **Flat-shift retard** to apply the ignition-retard patch (draft) to the open ROM.
+7. Toggle **JA / EN** with the language button; **Help** shows `docs/editor_help_ja.md`.
+8. `python tools/gen_manual.py` generates a full PDF manual of every map.
 
-See `docs/` and the generated `docs/map_editor_manual.pdf` for details.
+## Documents (`docs/`)
+
+| File | Content |
+|---|---|
+| `map_analysis.html` / `map_analysis_EN.md` | Full map analysis (English) |
+| `map_analysis_JA.html` / `map_analysis_JA.md` | Full map analysis (Japanese) |
+| `tuning_flatshift_ja.md` | Flat shift: stock throttle cut, spark path, ignition-retard patch, editor steps (JA) |
+| `tuning_overrun_pops_ja.md` | Overrun pops / burble tuning (JA) |
+| `editor_help_ja.md` | Editor help (JA) |
+| `SETUP_ja.md` / `can_flash_ready_ja.md` | Setup and flash preparation (JA) |
+| `PROJECT_HANDOFF_ja.md` | Project handoff / current state (JA) |
 
 ---
 
