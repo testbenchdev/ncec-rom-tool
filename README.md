@@ -5,7 +5,7 @@ An open-source **read / edit / compare / flash / live-monitor** tool for the fac
 A hobby / learning project aiming at a LinkECU- or Haltech-style native-reflash tuning
 environment for the stock ECU.
 
-Current version: **2.30** (`VERSION`; change history in `CHANGELOG_ja.md`, Japanese).
+Current version: **2.40** (`VERSION`; change history in `CHANGELOG_ja.md`, Japanese).
 日本語版: [README_ja.md](README_ja.md)
 
 ---
@@ -39,7 +39,7 @@ Current version: **2.30** (`VERSION`; change history in `CHANGELOG_ja.md`, Japan
 | Configure per-PID poll intervals in the GUI (Settings → Live PID intervals); the live-RAM channels (KR/clutch/EGT/knock) are listed there too | ✅ |
 | DBW throttle 1:1 tool (cable-like pedal map; edits control + monitor copies; editor **DBW throttle** button) | ✅ Generated & self-verified; on-car effect not yet tested |
 | Anti-lag (overrun pops/burble) patch — editor **Anti-lag** button (A: DFCO off / B: RPM gate / C: response); shows which maps changed | ✅ Generated & self-verified; not on-car tested; cat/exhaust heat caution |
-| Live RAM read (dashboard shows KR/clutch/EGT via Mode23) | ✅ Client done; needs the user-applied Mode23-enable patch on the ECU |
+| Live RAM read via Mode23 (clutch `0xFFFF7100`, decel status, KR, EGT, knock); clutch & decel confirmed on-car via `tools/ram_diff.py` | ✅ Client done; needs the user-applied Mode23-enable patch on the ECU |
 | Live knock (Proto-Knock): knock count / magnitude / retard RAM read + dashboard tiles | ✅ RE'd (bench==car ROM); count confirmed, magnitude/retard candidates — confirm on car |
 | Dashboard display modes (number / bar / gauge / graph) + smooth update | ✅ |
 | Dashboard polish (OBD2monitor-style): gauge fits its tile, red alarm zone, vertical/horizontal bars, per-tile update interval | ✅ |
@@ -47,7 +47,7 @@ Current version: **2.30** (`VERSION`; change history in `CHANGELOG_ja.md`, Japan
 | Log analysis chart (stacked time-series of a recorded log) | ✅ |
 | Dashboard (gauge tiles), logging and replay | ✅ |
 | Auto-generated PDF manual / full map analysis (JA / EN) | ✅ |
-| **Flat-shift ignition-retard patch** (draft 3, apply and edit in the editor) | ⚠️ Emulator-verified only, **not yet tested on hardware** |
+| **Flat-shift ignition-retard patch** (draft; trigger now uses the real clutch `0xFFFF7100` found on-car) | ⚠️ Emulator-verified; **not yet tested on hardware** |
 
 ### Flashing
 Writing this ECU requires an **SBL (Secondary Boot Loader)** for NC1 (flash start 0x2000, 0x1800 bytes).

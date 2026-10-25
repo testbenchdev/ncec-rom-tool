@@ -19,7 +19,8 @@
   → 特殊モード(0xFFFF7A94 bit7/bit6)の経路はこのクランプを通らないので影響しない。
 
 発動条件（すべて成立でリタード）:
-  クラッチ踏込  byte  0xFFFF6FCC != 0      （純正 0x0979A0 が使うCPP状態）
+  クラッチ踏込  byte  0xFFFF7100 != 0      （本物のクラッチスイッチ=踏込1。実車RAM差分で特定）
+    ※旧版は 0xFFFF6FCC を使っていたが、実車確認でそれは減速ステータス(Decel)と判明し訂正。
   APP > しきい値 float 0xFFFF56C8 [%]       （APP1/APP2合成後の最終ペダル開度 0〜100）
   RPM > しきい値 float 0xFFFF6D5C [rpm]     （OBD PID 0x0C の元）
   車速 > 下限    float 0xFFFF6D04 [km/h]    （OBD PID 0x0D の元）
@@ -35,7 +36,7 @@
   DE214 (RPM 同様) / DE220 (車速 同様)
   DE22C mov.l  P_RET,r2 / fmov.s @r2,fr7 / fsub fr7,fr4      ; 値 -= リタード量
   DE232 done: mov.l L_CLAMP,r1 / jmp @r1 / nop                ; 純正クランプへ（戻りは呼び出し元のPR）
-  DE238 リテラル: 0xFFFF6FCC 0xFFFF56C8 0xFFFF6D5C 0xFFFF6D04 0x00002404 + 定数4個へのポインタ
+  DE238 リテラル: 0xFFFF7100 0xFFFF56C8 0xFFFF6D5C 0xFFFF6D04 0x00002404 + 定数4個へのポインタ
   DE260 定数(float): APPしきい値 / RPMしきい値 / 車速下限 / リタード量
   使用レジスタ r0-r2 / fr0,fr1,fr7: 呼び出し元(0x4D9D0)は戻り後に fr0 だけを使い r2 は再ロードする。
   入力 fr5(最大リタード=@0x7AFC)/fr6(最大進角) と r13/r14 には触れない。
@@ -49,7 +50,7 @@ from .defs import Scaling, Table
 
 CLAMP_LIT = 0x4DA98      # タスク0x4D8DAの最終進角クランプ(0x4D9D0)が使うリテラル
 CLAMP_FUNC = 0x2404      # 純正 clamp(fr4, fr5=min, fr6=max) -> fr0
-RAM_CPP = 0xFFFF6FCC     # クラッチ(CPP) 踏込=非0
+RAM_CPP = 0xFFFF7100     # クラッチスイッチ 踏込=1(実車のRAM差分で特定・ROM参照14箇所の本家入力)
 RAM_APP = 0xFFFF56C8     # アクセル開度 [%]
 RAM_RPM = 0xFFFF6D5C     # エンジン回転 [rpm]
 RAM_VSS = 0xFFFF6D04     # 車速 [km/h]
