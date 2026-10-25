@@ -3,7 +3,7 @@
 対象: Mazda NCEC(ロードスター/MX-5)用 ECU(SH7058 / CAL ID: LFG7EG)の予備ECU解析
 ベースROM: `ncec_rom_dump.bin` / 定義: LibreTuner(LFG7EG) / カテゴリ124・テーブル875 を全数調査
 
-> ⚠️ 本資料はベンチECUでの**値・単位の確認**に基づく解析メモです。**実機書込みは未実施**(SBL未入手でフラッシュ不可)。数値は当該個体(1台)の実測で、他個体・他CALで異なる場合があります。
+> ⚠️ 本資料はベンチECUでの**値・単位の確認**に基づく解析メモです。**実機フラッシュはSBL入手済で検証済み**:予備/ベンチECUに加え、**車上のOBD2ポート(CAN-H/CAN-L/GND)経由の書き込みにも成功**(いずれも既存の DSD TECH SH-C30L のみ・追加I/F不要)。対象は自分のECU／車両に限る。数値は当該個体(1台)の実測で、他個体・他CALで異なる場合があります。
 
 ---
 
@@ -21,7 +21,7 @@
 - **安全監視(Data Integrity)** (15カテゴリ)
 - **診断コード(DTC)** (2カテゴリ)
 - **リミッタ(回転/車速/負荷)** (5カテゴリ)
-- **パッチ(コード書換)** (6カテゴリ)
+- **パッチ(コード書換)** (7カテゴリ)
 - **センサ/車両系** (7カテゴリ)
 - **作業中(WIP)/その他** (1カテゴリ)
 - **その他** (5カテゴリ)
@@ -432,7 +432,7 @@
 - ・Transition from Idle Add Retard Rate | Timer Expired(1x1, °)=0.7。タイマ満了後に加算分を抜くレート(°/周期)。
 - 【単位修正(i18n.py)】'Add Timer' が カテゴリ spark→° 誤爆で°。実体はタイマ(カウント/時間、角度ではない)→無単位。ルール追加: 'cold advance' かつ 'add timer'→""。'Add Retard Rate | Timer Expired' は °/周期のレートなので除外し°維持(コードベースのRate=°慣例に合わせる)。
 - 回帰確認: 他spark の timer系(Restore Advance Rate=°, Transition Timer Reset=無単位, Retard Multiplier=×, Max Retard=°)は不変。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火補正 - EGR作動時進角  （4項目）
 *カテゴリ名(定義): `Spark Comp - EGR Advance` ／ ノートID: `spark-comp-egr-advance` ／ 記録日: 2026-10-09*
@@ -444,7 +444,7 @@
 - ・Spark EGR Advance | Remote Test Mode(13x10, °)=診断/テスト用の別マップ(離散値)。
 - 読み方: EGRが効く中負荷中回転で進角を厚くし、EGR非作動域(低負荷0.12/高負荷0.69以上/両端回転)は0。実EGR率が目標に満たなければ比係数で進角も比例縮小。
 - 【単位】全4本 正(進角マップ3本=°, 比係数=×)。誤ラベルなし→コード変更不要。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火補正 - フィードバック(作業中/AT)  （1項目）
 *カテゴリ名(定義): `Spark Correction - Feedback WIP (AT)` ／ ノートID: `spark-corr-feedback-wip-at` ／ 記録日: 2026-10-09*
@@ -453,7 +453,7 @@
 - ・Feedback Retard - Maximum | 6E53 Set, 6E5E Set(1x1 float, °)=39.7266°。
 - 役割: フラグ6E53 Set かつ 6E5E Set の条件で、この補正が入れられる遅角量の上限=約39.73°を規定(安全リミッタ)。軸を持たない定数。
 - 【単位】° で正(遅角量の上限)。誤ラベルなし→コード変更不要。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火補正 - 高水温時(作業中/AT限定)  （10項目）
 *カテゴリ名(定義): `Spark Correction - High ECT Spark Corection WIP (AT Only)` ／ ノートID: `spark-corr-high-ect-wip-at` ／ 記録日: 2026-10-09*
@@ -463,7 +463,7 @@
 - 役割(推定): 高水温(オーバーヒート域)でのAT向け点火補正量を離散インデックス(高ECT状態の段階/進行カウンタ)で引く配列。特定段階で一時的に大きく補正しその後戻す曲線。
 - 符号(進角/遅角)はこのスカラー群だけでは断定不可(呼び出し側ロジック依存)。AT限定・WIP扱いのため実挙動はベンチ要確認。
 - 【単位】全10本 ° で正(点火補正量)。誤ラベルなし→コード変更不要。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火補正 - 高回転・高水温時の遅角  （8項目） 🔧単位修正あり
 *カテゴリ名(定義): `Spark Correction - High RPM and ECT` ／ ノートID: `spark-corr-high-rpm-ect` ／ 記録日: 2026-10-08*
@@ -478,7 +478,7 @@
 - 本個体は Rate/Limit とも0なので、しきい値を満たしても実際の遅角は発生しない(無効化された保護枠)。
 - 【単位修正(i18n.py)】RPM Threshold[/Hys] と ECT Threshold[/Hys] がカテゴリ 'spark'→° で誤って°。ルール追加: 名前に 'high rpm and ect retard' を含む場合、rpm threshold→rpm、ect threshold→°C。Rate/Limit/Restore(°)と Activation Delay(既に無単位)は不変。カテゴリ固有名のため誤爆なし。
 - 結果: 4本是正(rpm×2, °C×2)。定義名typo 'Sarpk'(=Spark)は原ファイル由来。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火補正 - ノックリタード(ノック時遅角)  （16項目） 🔧単位修正あり
 *カテゴリ名(定義): `Spark Correction - Knock Retard` ／ ノートID: `spark-corr-knock-retard` ／ 記録日: 2026-10-08*
@@ -501,7 +501,7 @@
 - ・KR Decrement Rate | Knock Listen Active=0.17 / Inactive=0.352(°/周期): 遅角を戻す速さ。監視中は遅め、監視外は速め。
 - 【単位修正(i18n.py)】カテゴリ 'spark'→° が誤爆し、負荷しきい値・回転しきい値・各Delayまで°だった。ルール追加: カテゴリに 'knock retard' を含む場合、load→無単位、rpm→rpm、delay→無単位。KR量/最大/増減レート(°)は従来どおり。対象カテゴリ内のみ=誤爆なし。
 - 結果: 9本是正(負荷2=無単位, 回転4=rpm, Delay3=無単位)、KR量/レート/最大7本は°維持。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。KRはノック保護の要であり、安易な縮小はエンジン保護を弱める。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。KRはノック保護の要であり、安易な縮小はエンジン保護を弱める。
 
 ### 点火補正 - 息つき/ストール復帰  （1項目）
 *カテゴリ名(定義): `Spark Correction - Stumble Recovery` ／ ノートID: `spark-corr-stumble-recovery` ／ 記録日: 2026-10-09*
@@ -511,7 +511,7 @@
 - 読み方: 低負荷は補正0。負荷が0.25から立ち上がると+3→+6→+10°と進角加算、0.38以上で最大+10°。アイドルで急に負荷が掛かり回転落ち込む場面でトルク補填しエンスト回避。暖機後(ECT>=70)・MT・N・アイドル限定。
 - 【単位】° で正(点火進角補正量)。誤ラベルなし→コード変更不要。
 - 【備考】定義名は末尾カンマ付きの未完ラベル(元ファイル由来)。X軸はtip-in系の7DA4とは別の負荷PID 6F44。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火補正 - 急開時アンチラグ(低回転保護)  （9項目） 🔧単位修正あり
 *カテゴリ名(定義): `Spark Correction - Tip-In Anti Lug` ／ ノートID: `spark-corr-tipin-anti-lug` ／ 記録日: 2026-10-08*
@@ -529,7 +529,7 @@
 - 【単位修正(i18n.py)】Minimum RPM Threshold が 'spark'→° で誤って°。ルール追加: 'anti lug' かつ 'rpm threshold'→rpm(anti lug限定)。ROM全体監査の結果、グローバルな rpm threshold→rpm はVCTの'Correction to Apply | Above RPM Threshold'(条件)や×乗数/Count Requiredを巻き込むため不可と判断し限定。
 - 結果: #6 °→rpm のみ是正。Calculated Gear/Retard Limit=°、各Multiplier=×、Req Torque=N·m は正のまま。
 - 【備考】VCT(DO NOT MODIFY)にも RPM Threshold[/Hys]=7000/93.75 の°誤ラベルが残存。VCTカテゴリ質問時に個別精査。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火補正 - 急開時(1速)  （11項目）
 *カテゴリ名(定義): `Spark Correction - Tip-In First Gear` ／ ノートID: `spark-corr-tipin-first-gear` ／ 記録日: 2026-10-09*
@@ -547,7 +547,7 @@
 - ・ZEROED RPM Multiplier | AT, Flag 6E74 Set/Clear(1x11, ×)=全0。
 - まとめ: MTはベース12°をTP/RPM/IAT倍率で調整(浅開度・中回転で最大、高温で減衰)。A/C時+11.25°進角。ATは全系ゼロで不使用。
 - 【単位】全11本 正(Base/Add Advance=°, 各Multiplier=×)。誤ラベルなし→コード変更不要。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火補正 - 急開時(発進)  （5項目）
 *カテゴリ名(定義): `Spark Correction - Tip-In From Stop` ／ ノートID: `spark-corr-tipin-from-stop` ／ 記録日: 2026-10-08*
@@ -560,7 +560,7 @@
 - ・Multiplier Decrement to 0 | VSS GT 3.76=0.03(×/周期): 車速が付いたら速く抜く。
 - 動作: ベース遅角を倍率で滑らかに立ち上げ、発進が進むと車速に応じ速やかに解除。A/C Offの方が深い遅角。
 - 【単位】全5本 正(Base Retard=°, Multiplier Increment/Decrement=×)。誤ラベルなし→コード変更不要。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火補正 - 急開時(高速)  （10項目） 🔧単位修正あり
 *カテゴリ名(定義): `Spark Correction - Tip-In High Speed` ／ ノートID: `spark-corr-tipin-high-speed` ／ 記録日: 2026-10-09*
@@ -574,7 +574,7 @@
 - 【単位修正(i18n.py)】カテゴリ 'spark'→° 誤爆で Delay と APP Increasing/Decreasing が誤って°。ルール追加: 'tip-in retard high speed' のとき delay→無単位、app increasing/decreasing→×。Base Retard=°・ZEROED Multiplier=×(後段のmultiplier→×)は温存。
 - 判定根拠: Delay は datatype=uint8(整数カウント、点火度ではない)。APP Increasing/Decreasing は float・max1.3・値が〜1.0収束で倍率。
 - 結果: Delay×3 →無単位、APP×2 →×、既存のMultiplier→×/Base Retard→° は不変。他カテゴリにapp increasing/decreasingは無く波及なし。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火補正 - 急開時(共通)  （3項目）
 *カテゴリ名(定義): `Spark Correction - Tip-In Shared` ／ ノートID: `spark-corr-tipin-shared` ／ 記録日: 2026-10-08*
@@ -585,7 +585,7 @@
 - ・Tip-In Retard Shared - ECT Multipier | MT(typo=Multiplier)=〜60°C:0、70°C:0.5、80〜100°C:0.996。MTは暖機後に急開遅角を有効化、冷間は無効。
 - まとめ: MTは暖機後のみ急開遅角を効かせ冷間は0。ATは2枚とも0で急開遅角を使わない。
 - 【単位】全3本 × で正。誤ラベルなし→コード変更不要。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火補正 - 減速からの復帰  （9項目）
 *カテゴリ名(定義): `Spark Correction - Transition from Decel` ／ ノートID: `spark-corr-transition-from-decel` ／ 記録日: 2026-10-08*
@@ -602,7 +602,7 @@
 - ・| 8250 Clear, AC Off=0.05 / | 8250 Clear, AC On=0.1 / | 8250 Set, AT=0.05(いずれも1x1, °/周期)。
 - 【単位】全9本 ° で正(遺角°・戻しレート°/周期)。誤ラベルなし→unit_of変更なし。
 - 【軸ラベル改善(i18n.py)】X軸 LOAD_DELTA_7C00 が既定 'LOAD'→'エンジン負荷' で絶対負荷と区別できなかったため、AXIS_SPECIAL に 'LOAD_DELTA'→『負荷変化量 (Load Delta)』を追加。他のLOAD_*(絶対負荷)は不変を確認。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。定義名の 'Resotre' は原typo(機能は Restore)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。定義名の 'Resotre' は原typo(機能は Restore)。
 
 ### 点火補正 - 走行→アイドル移行  （5項目） 🔧単位修正あり
 *カテゴリ名(定義): `Spark Correction - Transition from In-Gear to Idle` ／ ノートID: `spark-corr-ingear-to-idle` ／ 記録日: 2026-10-08*
@@ -615,7 +615,7 @@
 - ・Transition Retard Multiplier | Trans Timer Not Expired(1x8, X=アイドル上回転(RPM−IdleSpeed), ×)=移行タイマ未満了の間の遅角倍率。目標回転−200〜0で0(介入なし)、+100で0.8、+200以上で1.0。
 - 【単位修正(i18n.py)】Transition Timer Reset がカテゴリ 'spark'→° で誤って°。実体はタイマ/カウントのリセット値。ルール追加: 'timer reset' を含む→無単位。Fuel側 'Load Threshold Timer Reset'(=60, 既に無単位)も同ルールで整合、対象2本のみ=誤爆なし。
 - 結果: Transition Timer Reset 1本 °→無単位。Retard Limit/Rate=°、Multiplier×2=× は正のまま。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ---
 
@@ -629,7 +629,7 @@
 - ・Dwell WIP(1x14, 回転数軸, ms)=0〜0.107msの微小値。回転別のドウェル微補正(トリム)と推定。名称WIP=Work In Progress(試作/未完テーブルの可能性)。絶対ドウェルではない。
 - ・Dwell Time | Speed Limiter Active(1x1, ms)=0.768ms。速度/回転リミッタ作動時はドウェルを極小に落とし、火花を弱める=点火側でのソフトなトルクカット手段。
 - 【単位】全3本とも ms で正。誤ラベルなし→コード変更不要。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火時期ベース - 高燃料要求時  （4項目） 🔧単位修正あり
 *カテゴリ名(定義): `Spark Base - High Fuel Request` ／ ノートID: `spark-base-high-fuel-request` ／ 記録日: 2026-10-08*
@@ -642,7 +642,7 @@
 - ・Low-Det (15x14): ノック少×全域。
 - 値の傾向: 軽負荷側(上行)は進角大(最大〜59.9°)、高負荷側(下行)は遅角(最小〜-20°=低回転高負荷のノック回避)。同条件比較で Low-Det は High-Det より進角(例: 負荷約0.5/2000rpm で High-Det 20.8° vs Low-Det 29.8°)=ノックが出なければ進める設計。
 - 【単位】全4本とも ° で正。誤ラベルなし→コード変更不要。進角マップは名前に threshold/hysteresis/delay を含まず、前件『移行』の単位修正ブロックにも掛からない(誤爆なし確認済み)。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。進角は最もエンジンを壊しやすい領域のため、実機適用は慎重に。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。進角は最もエンジンを壊しやすい領域のため、実機適用は慎重に。
 
 ### 点火時期ベース - 高燃料要求への移行  （3項目） 🔧単位修正あり
 *カテゴリ名(定義): `Spark Base - High Fuel Request Transition` ／ ノートID: `spark-base-high-fuel-request-transition` ／ 記録日: 2026-10-08*
@@ -653,7 +653,7 @@
 - ・Low to High Fuel Request Transition Delay=NaN: 低→高へ移行する際の遅延。読値はNaN(=未設定/無効を示す特殊ビット列の可能性)。遅延カウントで無単位。
 - 【単位修正(i18n.py)】カテゴリ名の 'spark'→° が誤爆し、名前に(%)やTransition Delayと明記のある#2/#3まで『°』になっていた。名前先取りブロックを追加: fuel request かつ threshold/hysteresis/delay のとき (Lambda)→λ、(%)またはhysteresis→%、delay→無単位。進角マップ(High/Low Fuel Request・Spark Base Limitの12本)はthreshold/hysteresis/delayを含まず不一致=従来どおり°を維持(ROM全体で誤爆ゼロを確認)。
 - 結果: #1=λ(=def宣言、値は要注意)、#2 °→%(修正)、#3 °→無単位(修正)。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火時期ベース - 低燃料要求時  （4項目）
 *カテゴリ名(定義): `Spark Base - Low Fuel Request` ／ ノートID: `spark-base-low-fuel-request` ／ 記録日: 2026-10-08*
@@ -663,7 +663,7 @@
 - 高要求 vs 低要求の差(Low-Det全域で比較): 軽負荷(0.12〜0.25行)は両者ほぼ同一。中〜高負荷で差が出て、低要求は高要求より遅角。例 全負荷1.0/2000rpm: 高要求17.0° vs 低要求4.5°、1500rpm: 7.3° vs 1.5°。
 - 物理的意味: 同じ負荷指標でも、低燃料要求=リーン寄りは燃焼が高温・ノックしやすいので進角を控える。高燃料要求=増量(リッチ)は充填が冷えてノック耐性が上がるので進角できる。巡航/軽中負荷は低要求マップ、加速/高負荷は(移行しきい値を越えて)高要求マップへ。
 - 【単位】全4本とも ° で正。誤ラベルなし→コード変更不要。(定義名 'Low-Det '末尾スペースはROM定義由来で表示上無害)
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。7000rpm超は7000列を保持(別ノート rpm-above-7000-clamp 参照)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。7000rpm超は7000列を保持(別ノート rpm-above-7000-clamp 参照)。
 
 ### 点火時期ベース/アイドル移行  （3項目） 🔧単位修正あり
 *カテゴリ名(定義): `Spark Base / Idle Transition` ／ ノートID: `spark-base-idle-transition` ／ 記録日: 2026-10-08*
@@ -674,7 +674,7 @@
 - ・Transition to Idle Above Fuel Start-Up Enrichment Threshold(1x1, %)=6.6: 始動時増量(Start-Up Enrichment、%で表現)の残量が6.6%超ならアイドル側へ移行する追加条件。始動直後(増量が残る間)はアイドルマップを使い、増量が減ってから走行ベースへ渡す。
 - 【単位修正(i18n.py)】カテゴリ名の 'spark'→° が誤爆し3本とも°になっていた。実体は切替条件。名前ブロックを追加: 'transition to spark base'/'transition to idle' のとき RPM Threshold→rpm、Enrichment Threshold→%(始動時増量が%であることを別テーブルで確認: ベース値12.5〜200%)。対象3本のみ該当=誤爆なし。
 - 結果: #1 °→rpm、#2 °→rpm、#3 °→%(全て修正)。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火時期ベース補正 - 水温/吸気温(複合)  （6項目）
 *カテゴリ名(定義): `Spark Base Comp - ECT / IAT Combined` ／ ノートID: `spark-base-comp-ect-iat` ／ 記録日: 2026-10-08*
@@ -688,7 +688,7 @@
 - ・ECT/IAT Combined Comp - Retard Rate to Zero(1x1, °)=0.2。補正を0へ戻す(遅角)際の変化量。急変させず滑らかに適用。
 - 全体像: 補正角 = Base/IMRC/Power(温度マップ) × RPM×Loadスケール を、Advance/Retard Rateで滑らかに適用。
 - 【単位】× 1本、° 5本で妥当。誤ラベルなし→コード変更不要(Advance/Retard Rate の0.2は°/周期のスルーレートだが周期不明のため°表示のまま)。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火時期ベースの上限  （4項目）
 *カテゴリ名(定義): `Spark Base Limit` ／ ノートID: `spark-base-limit` ／ 記録日: 2026-10-08*
@@ -700,7 +700,7 @@
 - ・Spark Base Limit - VCT Add | VCT GT 5(15x13, 〜6500rpm, °)=加算マップ。吸気VCT進角が5°超のとき上限へ最大+4°上乗せ(カム進角でノック特性が変わり、もう少し点火を許容できる領域に対応)。0が大半で1500〜2500rpm中負荷と高回転高負荷に小さな+。
 - 値の傾向: 上限は -3.5〜54.9°。軽負荷の高進角セルでは上限(例54.9°)が生ベースマップのピーク(59.9°)より数度低く、積み上げ後も実効最大≈55°に抑える意図。中〜高負荷では上限がベースより十分高く、通常はベース値が優先される。
 - 【単位】全4本とも ° で正。誤ラベルなし→コード変更不要(VCT Add も進角加算°)。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。上限を上げると補正積み上げ時の最大進角が増え、ノック耐性に直結するため実機適用は特に慎重に。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。上限を上げると補正積み上げ時の最大進角が増え、ノック耐性に直結するため実機適用は特に慎重に。
 
 ### 点火時期ベース上限 補正(高負荷)  （3項目） 🔧単位修正あり
 *カテゴリ名(定義): `Spark Base Limit Comp - Power` ／ ノートID: `spark-base-limit-comp-power` ／ 記録日: 2026-10-08*
@@ -711,7 +711,7 @@
 - ・Power Comp - Retard Rate to Zero | Fuel Power Enleanment Clear(1x1, °)=リーン化解除時に補正を0へ戻す遅角レート。0。
 - 【単位修正(i18n.py)】名前の 'Fuel Power Enleanment Set/Clear' は '|' 以降の条件フラグなのに、既存の power enleanment→% ブロックが先に当たり3本とも % に誤判定していた。実体は点火進角(°)。power enleanment ブロック先頭に『advance/retard を含むなら °』ガードを追加。本物の燃料リーン化テーブル(advance/retard を含まない)への誤爆ゼロを確認。
 - 結果: 3本とも % → °(修正)。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火時期の上下限(保護)  （11項目）
 *カテゴリ名(定義): `Spark Limits` ／ ノートID: `spark-limits` ／ 記録日: 2026-10-09*
@@ -729,7 +729,17 @@
 - ・Retard Limit | Flag 7ACC Clear (RPM below 3000 or not Idle)=-27.75°。走行/過渡で最も深い遅角を許容。
 - 読み方: 上限一律+50°、故障時9.86°固定。遅角下限は条件可変(アイドル系≈-13.5°、故障71B0は-14.04°、7ACC Clearで-27.75°まで許容)。
 - 【単位】全11本 ° で正(点火時期の上限/下限)。誤ラベルなし→コード変更不要。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
+
+### 点火時期の上下限(保護)  （解説: 最終出力の経路）
+*カテゴリ名(定義): `Spark Limits` ／ ノートID: `spark-output-path` ／ 記録日: 2026-10-16*
+
+- 最終進角はタスク 0x4D8DA で clamp(0x7AE0+0x7B98+0x7DA4, 最大リタード=RAM 0xFFFF7AFC, 最大進角=@0xCE20C 50°) として計算され、RAM 0xFFFF7AA4 に書かれる(クランプは helper 0x2404、呼び出しは 0x4D9D0)。
+- タスク 0x4D84E が 0x7AA4 を進角側だけレート制限して 0xFFFF7AA0 を作る(OBD PID 0x0E=点火時期の表示元)。さらに気筒別補正 @0xCE1F4/F8/FC/0xCE200 を足して気筒別点火値 0xFFFF7AC8/7ACC/7AD0/7AD4 を作る。
+- 0x19B44 が気筒番号でこの気筒別点火値を選び、(進角−9.8)×65536 を点火イベント角度として設定する。ここが実際の点火。
+- タスク 0x4DD58 が作る 0xFFFF7AAC/7AB0 はトルクモデル(点火効率=1−k·(基準−点火)² の計算)専用で、点火そのものには使われない。
+- RTOSタスク表の順: 0x180F8=0x4D8DA → 0x180FC=0x4DD58 → 0x18100=0x4D84E。
+- 実用: 点火を変えるコードパッチは、0x7AA4 を作るクランプの前に入れる(フラットシフト点火リタード・パッチがこの方式)。
 
 ### 気筒別の点火割り当て  （5項目）
 *カテゴリ名(定義): `Spark To Cylinders` ／ ノートID: `spark-to-cylinders` ／ 記録日: 2026-10-09*
@@ -742,7 +752,7 @@
 - ・Cylinder 4 Trim(1x1, °)=0.0。
 - 読み方: 気筒別トリムは本個体では全気筒0°=均等(個別補正なし)。特定気筒のみ遅角する等に使用。Attack Rate Limiterはレート制限で全回転域5°/更新。
 - 【単位】全5本 ° で正(Attack Rate=°/更新, 各Trim=°)。誤ラベルなし→コード変更不要。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ---
 
@@ -756,7 +766,7 @@
 - ・Transition Rate to Spark Idle | Fast=0.02(°/周期): 走行ベース→アイドル上限へ戻る速さ(速)。
 - ・Transition Rate to Spark Idle | Slow(1x10, 回転数, °/周期): 戻る速さ(遅)。≤1500rpm=0.01(緩やか)、≥2000rpm=1.0(素早い)。アイドル付近は滑らかに、オフアイドルは即収束。
 - 【単位】全3本 ° で正(ramp対象=進角上限°、レート=°/周期。Decrement/Increment Rate と同扱い)。誤ラベルなし→コード変更不要。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。これで Spark Idle 系カテゴリの確認を一通り完了。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。これで Spark Idle 系カテゴリの確認を一通り完了。
 
 ### 点火 アイドル/ベース上限 補正 - 特殊暖機(作業中)  （14項目） 🔧単位修正あり
 *カテゴリ名(定義): `Spark Idle / Base Limit Correction - Special Warm-Up WIP` ／ ノートID: `spark-idle-base-limit-corr-warmup-wip` ／ 記録日: 2026-10-08*
@@ -774,7 +784,7 @@
 - ・Increment Rate To Target(2本)=目標へ上げる速さ。非アイドル0.3/アイドル0.4。
 - 【単位修正(i18n.py)】#Warm-Up Fuel Target が warm+fuel target→無単位ルールに誤爆し『無単位』だったが、実体は進角補正目標(値18°はアイドル補正範囲内)。ルール追加: 'spark idle correction' かつ 'target' かつ multiplier無し→°。他の target/rate 10本(既に°)とも整合し、WIPカテゴリ内のみに作用(非sparkのWarm-Up Fuel Target=''/×は不変)を確認。
 - 結果: Warm-Up Fuel Target 1本 無単位→°。他は不変(×3/°10)。
-- 【注意】WIP(未完)テーブルにつき実挙動は要検証。レート100は即時適用のセンチネルと推定。ベンチECUで値確認のみ、書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】WIP(未完)テーブルにつき実挙動は要検証。レート100は即時適用のセンチネルと推定。ベンチECUで値を確認、実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火 アイドル時の上限  （2項目）
 *カテゴリ名(定義): `Spark Idle Limit` ／ ノートID: `spark-idle-limit` ／ 記録日: 2026-10-08*
@@ -784,7 +794,7 @@
 - ・Spark Idle Limit | IMRC(9x11, °)=IMRC作動時版。本個体では上と同一データ。
 - 意味: 低回転・高負荷のこもりやすい領域はトルクを抜く向き(遅角許容)、負荷が軽く回転が高い領域は進角を許す。アイドル制御が点火でトルクを即応調整する際の振れ幅を制限する。
 - 【単位】° で正。誤ラベルなし→コード変更不要。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火 アイドル上限補正 - A/C断続切替  （3項目） 🔧単位修正あり
 *カテゴリ名(定義): `Spark Idle Limit Correction - AC Cycle Transition` ／ ノートID: `spark-idle-limit-corr-ac-cycle` ／ 記録日: 2026-10-08*
@@ -795,7 +805,7 @@
 - ・Spark Idle AC Cycle Off Comp - Value | AC Cycle Off, Delay Active, Not In-Gear=4°。N時はA/C OFF後に+4°の進角補正。
 - 【単位修正(i18n.py)】'Duration' がカテゴリ 'spark'→° で誤って°。実体は適用保持時間/カウント。ルール追加: 'spark idle' かつ 'duration' を含む→無単位。同ルールで PS Cycle Transition の Duration 2本(6, 14)も是正。'… - Value'(進角補正°, 全8本)は対象外=°維持を確認。
 - 結果: Duration 1本 °→無単位(AC)。副次でPS側Duration 2本も是正。Value系8本は°不変。
-- 【注意】Duration値(4/6/14)の時間単位(秒かループ数か)は未確定。ベンチECUで値確認のみ、書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】Duration値(4/6/14)の時間単位(秒かループ数か)は未確定。ベンチECUで値を確認、実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火 アイドル上限補正 - アイドル回転偏差  （8項目）
 *カテゴリ名(定義): `Spark Idle Limit Correction - Idle Error` ／ ノートID: `spark-idle-limit-corr-idle-error` ／ 記録日: 2026-10-08*
@@ -811,7 +821,7 @@
 - ・同 | …, Not In-Gear(1x1, °)=1.0(°/周期)。N時は速く戻す。
 - 【単位】全8本とも ° で正(偏差補正も減衰率も角度)。誤ラベルなし→unit_of変更なし。
 - 【軸ラベル改善(i18n.py)】IDLE_* 軸が既定で全て『アイドル』表示だったため AXIS_SPECIAL を追加: IDLE_ERROR→アイドル回転偏差(rpm)、IDLE_LOAD→アイドル負荷、IDLE_SPEED→アイドル回転数(rpm)、IDLE_SPEED_TRIM→アイドル回転トリム位置。startswith順に注意(TRIMをSPEEDより前)。非IDLE軸への誤爆なしを確認。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 点火 アイドル上限補正 - パワステ断続切替  （9項目）
 *カテゴリ名(定義): `Spark Idle Limit Correction - PS Cycle Transition` ／ ノートID: `spark-idle-limit-corr-ps-cycle` ／ 記録日: 2026-10-08*
@@ -824,7 +834,7 @@
 - ・PS Cycle On Comp - Value | On, Not In-Gear=15°(据え切り=最悪条件で大きく進角し落ち込みを補う)。
 - ・PS Cycle Off Comp - Value | Off, In-Gear, AC On=8° / In-Gear, AC Off=8° / Not In-Gear, AC On=8° / Not In-Gear, AC Off=5°。吹け上がり抑制、基本+8°でN+ACオフのみ+5°。
 - 【単位】全9本とも適正でコード変更なし。Value=°(進角補正)、Decrement Rate=°(°/周期、アイドル偏差カテゴリと同扱い)、Duration 2本は前回A/C対応(spark idle+duration→無単位)で是正済み。
-- 【注意】Duration(6/14)の時間単位は未確定。ベンチECUで値確認のみ、書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】Duration(6/14)の時間単位は未確定。ベンチECUで値を確認、実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### アイドル負荷(点火) - オルタネータ補正  （2項目）
 *カテゴリ名(定義): `Spark Idle Load - Alternator Compensation` ／ ノートID: `spark-idle-load-alt-compensation` ／ 記録日: 2026-10-08*
@@ -834,7 +844,7 @@
 - ・Alt Comp Decrement Rate | Not In-Gear, Pos Alt to Ctrl Mod Delta=0.00075(無単位)。N時はやや速く抜く。
 - 対になる加算側は DI 'Alt Comp Base | … Neg Alt to Ctrl Mod Delta'(発電が指令より少ないとき加算)。
 - 【単位】既に無単位(減衰率)で正。前回のオルタネータ補正修正(spark→°誤爆解消)で対応済みのため今回コード変更なし。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### アイドル負荷(点火) - パワステ補正  （6項目） 🔧単位修正あり
 *カテゴリ名(定義): `Spark Idle Load - PSP Compensation` ／ ノートID: `spark-idle-load-psp-compensation` ／ 記録日: 2026-10-08*
@@ -846,7 +856,7 @@
 - 全体像: 基礎補正(Numerator/Divisor) → 条件別Secondary Multiplierで倍率調整 → PSP Comp Base Multiplier(水温ゲート, 冷間0〜暖機1.0)で最終スケール。
 - 【単位修正(i18n.py)】Numerator/Divisor と Divisor Sub がカテゴリ 'spark'→° で誤って°。実体は無次元定数。ルール追加: カテゴリに 'spark idle load - psp' を含み、かつ名前に 'multiplier' を含まないものは無単位。Secondary Multiplier/DIのBase Multiplier(×)は除外して温存。AC/Base/VSS/Alt 系への波及なしを確認。
 - 結果: 2本 °→無単位(修正)、Multiplier 5本は × 維持。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ---
 
@@ -862,7 +872,7 @@
 - 【単位修正(i18n.py)】VCT Activation - ECT Threshold/Hysteresis が、カテゴリ名 'cam timing' が汎用ループ(hay=カテゴリ+名称)で 'ect'→°C より先に当たり誤って角度°になっていた。ルール追加: ('ect threshold' or 'ect hysteresis') かつ カテゴリに 'cam timing'→°C。値がカム角の VCT Target(ectを含まない)は cam→° を温存。
 - 回帰確認: VCT Target=°、DO NOT MODIFY側の各Multiplier=×・CKP/CMP Offset=° は不変。
 - 【備考】DO NOT MODIFYカテゴリに VCT Error - RPM Threshold[/Hysteresis]=7000/93.75 の°誤ラベル、Correction to Apply=°(値-600〜400でカム角か要検証)が残存。当該カテゴリ質問時に精査。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 可変バルブタイミング(VVT)〔変更禁止〕  （12項目） 🔧単位修正あり
 *カテゴリ名(定義): `Variable Cam Timing - DO NOT MODIFY` ／ ノートID: `vct-do-not-modify` ／ 記録日: 2026-10-09*
@@ -881,7 +891,7 @@
 -   (1) 'vct error' かつ 'rpm threshold' かつ not multiplier/correction → rpm(RPM Threshold/Hysteresis の2本)。
 -   (2) 'vct error' かつ 'correction to apply' → 無単位(値-600〜400は位相器可動域を超えカム角ではない。OCV制御器出力)。
 - Multiplier群は後段 'multiplier'→×、CKP/CMP Offset=°、OCV=% は温存。VCT Baseも不変、他カテゴリ波及なし。
-- 【注意】変更禁止カテゴリ。ベンチECUで値確認のみ・書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】変更禁止カテゴリ。ベンチECUで値を確認・実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ---
 
@@ -905,7 +915,7 @@
 - ・Increment Rate Divisor(1x11, MAF g/s軸)=全域1000: 新ポート方向へ進む速さの分母。戻し(200)より進み(1000)が遅い=急な全開でも緩やかに移行。
 - ・Interpolation Bias(1x5)=移行進捗0/30/70/85/100%に対し重み0/0.25/0.6/0.8/1.0。進捗を実際のポート開度補間へ非線形マッピング(Sカーブ)。
 - 【単位修正】X軸の内部名 '2500/IMRC_DIVISOR_82DC' を『IMRC移行進捗(%)』へ別名化(AXIS_SPECIAL追加、Interpolation Bias専用、他軸誤爆なし)。各テーブルのunit_ofは既存ルールで正(°C/rpm/%、Load・Divisor・Biasは無次元表示)で変更不要。
-- 【扱い上の注意】AT限定ロジックのためMT車では無効/不使用の可能性が高い。ベンチECUで値確認のみ。書込みは未実施(SBL未入手でフラッシュ不可)。
+- 【扱い上の注意】AT限定ロジックのためMT車では無効/不使用の可能性が高い。ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 可変吸気バルブ(IMTV)  （6項目）
 *カテゴリ名(定義): `Intake Manifold Tuning Valve` ／ ノートID: `imtv` ／ 記録日: 2026-10-08*
@@ -919,7 +929,7 @@
 - ・Max RPM Threshold | Not Idle=3150rpm / Hysteresis=187.5rpm: 二次開は『回転3150rpm以下 かつ 非アイドル』の範囲に限定。これ以上は一次(4750rpm)側に引き継ぎ。
 - まとめ: アイドルは閉、中回転で踏めば二次で開(〜3150rpm)、高回転4750rpm↑は一次で常時開。中間の空白帯(3150〜4750)はヒステリシスで滑らかに接続。
 - 【単位】全6本とも既存ルールで正(%・rpm)。誤ラベルなし→コード変更不要。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ---
 
@@ -953,7 +963,7 @@
 - ・APP to Throttle Duty Desired - WIP, Brake On, VSS LT 2kph, AT(1x18, X=アクセル開度%, %)=0〜100。ブレーキON・車速<2kph・ATの条件下でのアクセル開度→目標スロットルデューティ。
 - 値はほぼ1:1だが低開度(0〜2.3%)で0のデッドバンド。ブレーキ踏下+微速時(AT)のスロットル制御(ブレーキオーバーライド/クリープ制御まわり)のWIPマップ。
 - 【単位】% で正(スロットルデューティ)。誤ラベルなし→コード変更不要。
-- 【注意】WIP(作業中)。ベンチECUで値確認のみ・書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】WIP(作業中)。ベンチECUで値を確認・実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 電子スロットル - 目標スロットル開度 補正(総合)  （5項目）
 *カテゴリ名(定義): `DBW - Throttle Duty Desired Comp - Aggregate` ／ ノートID: `dbw-throttle-duty-aggregate` ／ 記録日: 2026-10-06*
@@ -1087,7 +1097,7 @@
 - 【単位修正(i18n.py)】カテゴリ名の 'spark'→° が誤爆し4本とも°。実体は負荷加算。テーブル名が 'AC Comp Base | …' で 'spark idle load' を含まないため、既存の Spark Idle Load ブロックをカテゴリ判定('spark idle load - ac comp' in category)まで拡張して無単位化。VSS(km/h)/PSP・Alt(×)等の混在する姉妹カテゴリには波及しないことを確認。
 - 結果: 4本とも °→無単位(修正)。
 - 【備考】姉妹カテゴリ(Alternator補正・VSS補正・PSP補正)にも同種の°誤ラベルが残存。単位が混在(×/km/h/内部値)するため、該当カテゴリ質問時に個別精査予定。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 安全監視 - アイドル負荷(点火) オルタネータ補正  （6項目） 🔧単位修正あり
 *カテゴリ名(定義): `Data Integrity Checks - Spark Idle Load - Alternator Comp` ／ ノートID: `di-spark-idle-load-alt-comp` ／ 記録日: 2026-10-08*
@@ -1101,7 +1111,7 @@
 - ・Alt Comp - Alt to Ctrl Mod Delta Hysteresis(1x11, 無単位)=実発電と制御モジュール指令の差(Delta)判定のヒステリシス。全域7.8125の定数(X軸 FFFF_8154 は未使用)。単位は発電量差(電流系)と推定だが未確定のため無単位表示。
 - 【単位修正(i18n.py)】カテゴリ 'spark'→°、名前中 'duty'→% が誤爆し全6本が °/% だった。実体は airflow加算と負荷/ヒステリシス。ルール追加: カテゴリに 'spark idle load - alt' を含み multiplier を含まないもののうち、'estimated maf' を含む→g/s、他→無単位。非DIの 'Alt Comp Decrement Rate'(減衰率)2本も無単位化。PSP/AC/Base/VSS 系への波及なしを確認。
 - 結果: Estimated MAF Add 2本 °→g/s、Base/Hysteresis/Decrement 計6本 °or%→無単位。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 安全監視 - アイドル負荷(点火) ベース  （2項目） 🔧単位修正あり
 *カテゴリ名(定義): `Data Integrity Checks - Spark Idle Load - Base` ／ ノートID: `di-spark-idle-load-base` ／ 記録日: 2026-10-08*
@@ -1111,7 +1121,7 @@
 - ・Spark Idle Load - Base Add | ECT Start LT -200 else 0(1x7, 無単位)=始動時水温 < -200°C のときの加算。-200°Cは非現実値のため実質常に0(加算無効)。X軸 FFFF_8104 は未使用プレースホルダ。
 - 【単位修正(i18n.py)】名前/カテゴリの 'spark'→° が誤爆し2本とも°になっていた。値域0.135〜0.5は負荷であって進角ではない。名前ブロック追加: 'spark idle load' を含むなら無単位(負荷)。対象2本のみ該当=誤爆なし。
 - 結果: 2本とも °→無単位(修正)。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 安全監視 - アイドル負荷(点火) パワステ補正  （1項目）
 *カテゴリ名(定義): `Data Integrity Checks - Spark Idle Load - PSP Comp` ／ ノートID: `di-spark-idle-load-psp-comp` ／ 記録日: 2026-10-08*
@@ -1120,7 +1130,7 @@
 - 値: ECT<20°C=0(冷間は無効)、40°C=0.1、60°C=0.4、80〜100°C=1.0(フル)。暖機とともに補正を立ち上げる。
 - 実際の補正量は別カテゴリ 'Spark Idle Load - PSP Compensation'(分子/除数・Secondary Multiplier)が決め、本表が温度ゲートとして掛かる。
 - 【単位】× で正。誤ラベルなし→コード変更不要。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 安全監視 - アイドル負荷(点火) 車速補正  （5項目） 🔧単位修正あり
 *カテゴリ名(定義): `Data Integrity Checks - Spark Idle Load - VSS Comp` ／ ノートID: `di-spark-idle-load-vss-comp` ／ 記録日: 2026-10-08*
@@ -1134,7 +1144,7 @@
 - 【単位修正(i18n.py)】カテゴリ 'spark'→°、名前 'vss'→km/h が誤爆。#1/#2 は負荷(°→無単位)、#3/#4 は値が速度でない内部カーブ(km/h→無単位)。ルール追加: カテゴリに 'spark idle load - vss' を含み multiplier を含まないもの→無単位。さらに既存 'vss threshold'→km/h 判定に『spark idle load カテゴリは除外』ガードを追加(#3/#4 が 'VSS Threshold' を名前に持つため先取りされていた)。Multiplier(×)は温存。
 - 回帰確認: Fan Control / Power Enleanment 等の本物の VSS Threshold は km/h 維持。Spark Idle Load 系の他カテゴリ(Base/AC/PSP/Alt)も不変。
 - 結果: #1〜#4 を無単位化、#5 は × 維持。
-- 【注意】#3/#4 の値(0〜31.22)の物理単位は未確定。ベンチECUで値確認のみ、書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】#3/#4 の値(0〜31.22)の物理単位は未確定。ベンチECUで値を確認、実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 安全監視しきい値 - スロットル目標  （2項目）
 *カテゴリ名(定義): `Data Integrity Thresholds - DBW Throttle Duty Target` ／ ノートID: `di-thresholds-throttle-target` ／ 記録日: 2026-10-09*
@@ -1145,7 +1155,7 @@
 - P0601はOBD-II標準『内部制御モジュール・メモリ/チェックサム異常』。本マップはその判定閾値。
 - 【単位】両方 % で正(スロットルデューティ差)。誤ラベルなし→コード変更不要。
 - 【参考】通常マップ(5.6〜22)の値は末尾スペース付きトルク要求カテゴリの BYPASSED - WIP と同一パターン(定義上のコピー流用とみられる)。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 安全監視しきい値 - トルク要求  （3項目）
 *カテゴリ名(定義): `Data Integrity Thresholds - DBW Torque Request` ／ ノートID: `di-thresholds-torque-request` ／ 記録日: 2026-10-09*
@@ -1156,7 +1166,7 @@
 - ・Checksum Fault - Negative Torque Request Threshold(29x12, X=回転/Y=APP, N·m)=2.48〜199.2。負トルク(エンブレ/減速)側の要求しきい値マップ。
 - 【単位】全3本 N·m で正(トルクしきい値、値も2.0L実トルク域と整合)。誤ラベルなし→コード変更不要。
 - 【データ注意】同名で末尾スペース付きの別カテゴリ 'Data Integrity Thresholds - DBW Torque Request '(trailing space)が存在し、BYPASSED - WIP(29x12, 5.6〜22N·m, バイパス/作業中)1本を含む。元定義ファイルのカテゴリ名ゆれ。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ### 安全監視しきい値 - トルク要求  （1項目）
 *カテゴリ名(定義): `Data Integrity Thresholds - DBW Torque Request ` ／ ノートID: `di-thresholds-torque-request-bypassed` ／ 記録日: 2026-10-09*
@@ -1165,7 +1175,7 @@
 - ・BYPASSED - WIP(29x12, X=回転/Y=アクセル開度, 現単位N·m, float 5.6〜22)=値の種類 5.6/5.79/6.23/10.19/16.37/22.0(APP開度で段階、回転方向一定)。
 - 性質: BYPASSED=ECUロジックで未使用(迂回済み)、WIP=作業中。値の離散セットは『スロットル目標 - Throttle Duty Delta Threshold(%)』と完全一致=%テーブルをコピーしたプレースホルダとみられる。
 - 【単位の扱い】カテゴリ 'torque'→N·m と推定されるが、実機未使用かつ%テーブルのコピーで、本来トルク閾値の雛形(N·m)なのか%値がそのまま入っているだけなのか確定不能。明確な誤りとは言えないため現状N·mのまま保留(推測で書き換えない方針)。コード変更なし。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ---
 
@@ -1179,7 +1189,7 @@
 - 【単位修正(i18n.py)】126本中37本が、名称に含むセンサ種別で物理単位に誤爆していた(°7/kPa5/°C6/V6/%6/g/s3/rpm3/km/h1)。例: ECT系DTC→°C、MAP系→kPa、MAF系→g/s、O2電圧系→V、スロットル系→%、点火/カム系→°。
 - 対策: カテゴリ 'dtc flags' を含む場合は一括で無単位を返すルールを追加(全126本が0/1フラグのため安全)。'flag' を含むカテゴリは DTC Flags B のみ。
 - 結果: 126本すべて無単位に是正。DTC Thresholds等 他カテゴリは不変。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。値1/0=DTC検出の有効/無効で、むやみに0化すると診断が無効になる点に注意。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。値1/0=DTC検出の有効/無効で、むやみに0化すると診断が無効になる点に注意。
 
 ### 診断コード(DTC) 判定しきい値  （27項目） 🔧単位修正あり
 *カテゴリ名(定義): `DTC Thresholds` ／ ノートID: `dtc-thresholds` ／ 記録日: 2026-10-09*
@@ -1202,7 +1212,7 @@
 - ・P0601 TP Comp Fault 20C8 Activation Count: % → 無単位(回数)。
 - 追加ルール: カテゴリ 'dtc thresholds' かつ ('activation count'|'counter limit'|'timer')→無単位、'impedence/impedance'→Ω、'sync offset'→°、'tp threshold'→%。他(Fuel Trim=%, Load=無単位, ECT=°C, Req Torque閾値=N·m, TP factor=g/s)は後段へ流す。
 - 回帰確認: DTC以外の 'timer'/'tp threshold'/'activation count' 系(Engine Fan=s, Rev Limit条件=rpm, Power Enleanment/IMRC TP Threshold=%, 各×/°条件)は全て不変。スコープ限定で波及なし。
-- 【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。
+- 【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。
 
 ---
 
@@ -1212,11 +1222,21 @@
 *カテゴリ名(定義): `Engine Limiters - RPM` ／ ノートID: `limiter-rpm-rev` ／ 記録日: 2026-10-06*
 
 - 回転数上限保護。2系統=燃料カット(噴射停止)とスロットルカット(スロットルを閉じる)。
-- スロットルカット(2): ・| クラッチ踏込 @0xC53BC=6500rpm(ニュートラル空吹かしのオーバーレブ保護)。 ・| クラッチ戻し @0xC53C0=10000rpm(走行中=実質無効、燃料カットが先)。
+- スロットルカット(2): ・| クラッチ踏込 @0xC53BC=6500rpm(車速2km/h未満=停車中のみ。ニュートラル空吹かしのオーバーレブ保護)。 ・| クラッチ戻し @0xC53C0=10000rpm(走行中=実質無効、燃料カットが先)。
 - 燃料カット(9): ・一次 低水温しきい値 @0xC47A4=-15°C / ヒステリシス @0xC47A8=5°C。 ・| 水温が一次しきい値以下 or ECT入力故障 @0xC4870=5500rpm。 ・二次 低水温しきい値 @0xC47AC=-15°C / ヒステリシス @0xC47B0=5°C。 ・| 二次しきい値以下・始動時 @0xC4874=5500rpm。 ・| AT 73C0タイマ作動中 @0xC4878=6500rpm。 ・| ATタイマ満了・MT @0xC487C=7500rpm(実質のレブリミット)。 ・ヒステリシスA(ゼロ)| 73C5遅延作動 @0xC4880=0rpm。
 - まとめ: 通常(MT温間)は⑩7500rpmで燃料カット。冷間/低水温・ECT故障は⑤⑧5500rpmへ低下(③④⑥⑦が判定しきい値/ヒス)。クラッチ踏み空吹かしは①6500rpmでスロットルカット(走行中②10000=実質無効)。
 - 連動/注意: 上げるなら⑩(実レブ)中心に、バルブ・駆動系の許容回転を必ず確認。機械的限界超えはエンジン破損に直結。マニュアル第3章『回転リミッタ』の値と一致。
 - 表示(修正済み 2026-10-06): ①②スロットルカットは throttle→% 誤表示だったのを rpm に、③④⑥⑦の低水温しきい値/ヒスは rev limit→rpm 誤表示だったのを °C に是正(unit_of に rev limit 専用判定を追加)。燃料カット回転(5500/6500/7500/0)は rpm 維持。
+
+### リミッタ - 回転数(レブリミット)  （解説: クラッチ連動スロットルカットの車速条件 / +2追加項目）
+*カテゴリ名(定義): `Engine Limiters - RPM` ／ ノートID: `cpp-throttle-cut-speed-gate` ／ 記録日: 2026-10-16*
+
+- ルーチン 0x097346: リミット = (車速 < @0xC53B8(2.0km/h) かつ クラッチ踏込) ? @0xC53BC(6500rpm) : @0xC53C0(10000rpm)。フラグ 0xFFFF3827 = RPM > リミット(成立中は −@0xC53C4=100rpm のヒステリシス)。
+- エミュレータで確認: クラッチ踏込・7100rpm で、車速 0 / 1.9km/h は成立、2.1 / 60km/h は不成立。クラッチを離していれば常に不成立。
+- よって『CPP set(@0xC53BC)を上げればフラットシフトになる』(v1.10の説明)は誤り。走行中のシフトでは何も起きない。実体は停車中の空ぶかしリミッタで、ローンチ用の回転リミッタとして使える。
+- @0xC53B8(車速しきい値)と @0xC53C4(ヒステリシス)は LibreTuner 定義に無いため、エディタの追加項目としてこのカテゴリに表示する(v1.30〜、範囲外入力は拒否)。
+- 車速しきい値を大きくすれば(例 300km/h)走行中もクラッチ踏込でスロットルカットが効く理屈だが、未検証。
+- 関連RAM: クラッチ 0xFFFF6FCC(byte、非0=踏込。helper 0x1B978 はこのバイトを読むだけ)、車速 0xFFFF6D04(float km/h、PID 0x0D の元)、RPM 0xFFFF37DC(ETC側のコピー。本体は 0xFFFF6D5C=PID 0x0C の元)。
 
 ### リミッタ - 回転数(レブリミット)  （11項目）
 *カテゴリ名(定義): `Engine Limiters - RPM` ／ ノートID: `rpm-above-7000-clamp` ／ 記録日: 2026-10-08*
@@ -1279,7 +1299,7 @@
 - 状態: unpatched=36610(0x8F02=条件分岐命令のまま=DFCO有効/通常動作)。patched=9(0x0009=NOP)で分岐を潰しDFCO無効化=常時燃料噴射。
 - 現在値36610=未パッチ→この個体はDFCO通常作動。9を書くとNOP化してDFCO無効。
 - 【単位】- で正(生の命令ワード/オペコード、物理量ではない)。誤ラベルなし→コード変更不要。
-- 【注意】コード領域の書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(ベンチ・SBL未入手で書込み不可)。DFCO無効化は燃費悪化/オーバーラン挙動/触媒温度等に影響。カテゴリ名の末尾スペースは元定義のゆれ。
+- 【注意】コード領域の書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(予備/ベンチECUで検証済み・SBL入手済)。DFCO無効化は燃費悪化/オーバーラン挙動/触媒温度等に影響。カテゴリ名の末尾スペースは元定義のゆれ。
 
 ### パッチ - 排気量設定  （4項目） 🔧単位修正あり
 *カテゴリ名(定義): `Patch - Engine Displacement` ／ ノートID: `patch-engine-displacement` ／ 記録日: 2026-10-09*
@@ -1291,7 +1311,7 @@
 - ・replace NaN value with engine displacement in cc(@0xFBA00, float)=現状NaN(未設定)。ここに実排気量をccで書き込む(patched=1030656 はこの0xFBA00を指す)。単位=cc。
 - 仕組み: A/B/C の参照先を 0xFBA00 に張り替え、0xFBA00 に新排気量(cc)を格納。元の2.0L(LF 約1999cc)から変更する場合に使用。
 - 【単位修正(i18n.py)】Patch Address A/B/C が displacement→cc 誤爆で cc になっていた。実体はROMアドレス(ポインタ)。ルール追加: 'engine displacement' かつ 'patch address'→無単位。実排気量値(replace NaN…in cc)は cc を温存。他に displacement テーブルは無く波及なし。
-- 【注意】コード/定数書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(ベンチ・SBL未入手で書込み不可)。4か所セットで適用する(ポインタ3+値1)。
+- 【注意】コード/定数書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(予備/ベンチECUで検証済み・SBL入手済)。4か所セットで適用する(ポインタ3+値1)。
 
 ### パッチ - イモビライザー無効化  （1項目）
 *カテゴリ名(定義): `Patch - Immobilizer Disable` ／ ノートID: `patch-immobilizer-disable` ／ 記録日: 2026-10-09*
@@ -1302,7 +1322,7 @@
 - 現在値36616=未パッチ→この個体はイモビ照合有効。9を書くと鍵/BCM照合をスキップしイモビなしで始動可能。
 - 用途: ベンチ単体起動/エンジンスワップ/スタンドアロン運用(元の鍵/BCMが無い環境でECUを動かす)で一般的。盗難防止機構の無効化なので所有車両・自分のベンチECUに限る。
 - 【単位】- で正(生の命令ワード/オペコード)。誤ラベルなし→コード変更不要。
-- 【注意】コード書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(ベンチ・SBL未入手で書込み不可)。DFCO無効化パッチ(0x45976, 0x8F02→9)と同系統の手法。
+- 【注意】コード書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(予備/ベンチECUで検証済み・SBL入手済)。DFCO無効化パッチ(0x45976, 0x8F02→9)と同系統の手法。
 
 ### パッチ - 開ループ短期補正の修正  （1項目）
 *カテゴリ名(定義): `Patch - Open Loop Short Term Fuel Trim Fix` ／ ノートID: `patch-ol-stft-fix` ／ 記録日: 2026-10-09*
@@ -1313,7 +1333,7 @@
 - 目的: 高負荷/全開など開ループ域ではO2フィードバックのSTFTは本来ホールド(凍結)されるべきだが、純正の分岐条件によりSTFTが不適切に適用/保持される挙動を、分岐を無条件化して正す既知のフィックス。
 - 現在値141=未パッチ。
 - 【単位】- で正(生の命令バイト/オペコード)。誤ラベルなし→コード変更不要。
-- 【注意】コード書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(ベンチ・SBL未入手で書込み不可)。
+- 【注意】コード書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(予備/ベンチECUで検証済み・SBL入手済)。
 
 ### パッチ - メモリ読出し有効化(UDS Mode23)  （3項目）
 *カテゴリ名(定義): `Patch - UDS Read Memory By Address (Mode 23)` ／ ノートID: `patch-uds-mode23` ／ 記録日: 2026-10-09*
@@ -1324,7 +1344,17 @@
 - ・Patch @0x84C07(uint8): unpatched=6(0x06)→patched=15(0x0F)。同テーブルの許可フラグ/パラメータ変更。
 - 現状は全て未パッチ=Mode23無効。3か所すべて適用して初めて0x23読出しが開通する。
 - 【単位】全3本 - で正(生のコード/テーブルバイト、物理量ではない)。誤ラベルなし→コード変更不要。
-- 【注意】コード/テーブル書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(ベンチ・SBL未入手で書込み不可)。任意アドレスのメモリ読出しを開放するため自ECUの解析/ロギング用途に限定。DFCO/イモビ無効化と同じ『0x8Fxx分岐→NOP(9)』手法を含む。
+- 【注意】コード/テーブル書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(予備/ベンチECUで検証済み・SBL入手済)。任意アドレスのメモリ読出しを開放するため自ECUの解析/ロギング用途に限定。DFCO/イモビ無効化と同じ『0x8Fxx分岐→NOP(9)』手法を含む。
+
+### パッチ - フラットシフト（点火リタード）  （4項目・追加項目）
+*カテゴリ名(定義): `Patch - Flat Shift Ignition Retard` ／ ノートID: `patch-flatshift-retard` ／ 記録日: 2026-10-16*
+
+- 第3ドラフト(ベンチ検証用)。ncecu/flatshift.py が本体。tools/patch_flatshift_retard.py、またはエディタの『点火リタード』ボタンで適用する。
+- 注入: リテラル @0x4DA98(0x4D9D0 のクランプ呼び出しが参照)をケーブ 0xDE200 に差し替え。条件成立時は最終進角からリタード量を引いてから純正クランプ 0x2404 へ進む(純正の最大リタードで下限制限)。特殊モードの経路は通らない。
+- 条件: クラッチ 0xFFFF6FCC≠0 かつ APP 0xFFFF56C8 > @0xDE260(既定80%) かつ RPM 0xFFFF6D5C > @0xDE264(既定7000) かつ 車速 0xFFFF6D04 > @0xDE268(既定10km/h)。リタード量 @0xDE26C(既定20°)。
+- エディタ: パッチ適用済みROMでだけ4項目を表示。範囲外の入力は拒否(APP 0〜100 / RPM 3000〜7500 / 車速 0〜250 / リタード 0〜30)。
+- 検証: 逆アセンブル＋エミュレータ1484ケースで純正の計算(0x7B98−リタード)と一致。実機は未検証。ライブの点火時期 PID 0x0E(=0x7AA0)にリタードが出るはず。
+- RAM補足: APP%=0xFFFF56C8(APP1/APP2合成後の最終値0〜100、コピー 0xFFFF6CA4)。定義の軸名『APP_6D1C』は誤りで、0x6D1C〜0x6D30 は車速の履歴、0x6D10 は加速度。
 
 ---
 
@@ -1416,7 +1446,7 @@
 - ・Voltage Desired Add | RPM LT 5K, Load LT 0.80: rpm → V(電圧加算 -1.3〜0)。
 - ・WIP Limit | RPM below 312 or RPM LT Idle Speed: rpm → ×(0〜1の制限係数)。
 - 追加ルール: カテゴリに 'alternator' かつ 'wip' のとき 'voltage desired'→V、'wip limit'→×。Base RPM Threshold(主語がRPM)=rpm は後段で温存。非WIPオルタ系は不変。
-- 【注意】WIP(未完成)。ベンチECUで値確認のみ・書込み未実施(SBL未入手でフラッシュ不可)。Undefined項目は意味未確定。
+- 【注意】WIP(未完成)。ベンチECUで値を確認・実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。Undefined項目は意味未確定。
 
 ---
 

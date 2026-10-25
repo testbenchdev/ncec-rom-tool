@@ -5,7 +5,7 @@ An open-source **read / edit / compare / flash / live-monitor** tool for the fac
 A hobby / learning project aiming at a LinkECU- or Haltech-style native-reflash tuning
 environment for the stock ECU.
 
-Current version: **1.30** (`VERSION`; change history in `CHANGELOG_ja.md`, Japanese).
+Current version: **2.30** (`VERSION`; change history in `CHANGELOG_ja.md`, Japanese).
 日本語版: [README_ja.md](README_ja.md)
 
 ---
@@ -35,6 +35,16 @@ Current version: **1.30** (`VERSION`; change history in `CHANGELOG_ja.md`, Japan
 | ECU read-out (UDS 0x23, no SBL needed) / ECU↔ROM and ROM↔ROM compare | ✅ |
 | **Flashing over CAN** (SBL model) | ✅ Verified on a bench ECU and in the car via the OBD-II port — **SBL not included; you must supply it** |
 | Live monitoring (OBD-II Mode 01, >10 Hz) + DTCs + active-cell tracking on maps | ✅ |
+| Live PID decimation (poll slow PIDs less often; faster RPM update) | ✅ Offline-verified; on-engine effect not yet measured |
+| Configure per-PID poll intervals in the GUI (Settings → Live PID intervals); the live-RAM channels (KR/clutch/EGT/knock) are listed there too | ✅ |
+| DBW throttle 1:1 tool (cable-like pedal map; edits control + monitor copies; editor **DBW throttle** button) | ✅ Generated & self-verified; on-car effect not yet tested |
+| Anti-lag (overrun pops/burble) patch — editor **Anti-lag** button (A: DFCO off / B: RPM gate / C: response); shows which maps changed | ✅ Generated & self-verified; not on-car tested; cat/exhaust heat caution |
+| Live RAM read (dashboard shows KR/clutch/EGT via Mode23) | ✅ Client done; needs the user-applied Mode23-enable patch on the ECU |
+| Live knock (Proto-Knock): knock count / magnitude / retard RAM read + dashboard tiles | ✅ RE'd (bench==car ROM); count confirmed, magnitude/retard candidates — confirm on car |
+| Dashboard display modes (number / bar / gauge / graph) + smooth update | ✅ |
+| Dashboard polish (OBD2monitor-style): gauge fits its tile, red alarm zone, vertical/horizontal bars, per-tile update interval | ✅ |
+| Dashboard tuning: per-tile display color, scale with adjustable tick interval, graph time-window; thinner needle & smaller labels | ✅ |
+| Log analysis chart (stacked time-series of a recorded log) | ✅ |
 | Dashboard (gauge tiles), logging and replay | ✅ |
 | Auto-generated PDF manual / full map analysis (JA / EN) | ✅ |
 | **Flat-shift ignition-retard patch** (draft 3, apply and edit in the editor) | ⚠️ Emulator-verified only, **not yet tested on hardware** |
@@ -55,7 +65,7 @@ looks for `Decryption_sbl/sbl_nc1_flash_0x2000.bin` by default; the CLI is
   advance — before the stock max-retard clamp — while the clutch is pressed AND APP > threshold AND
   RPM > threshold AND vehicle speed > minimum. The throttle stays open while driving.
   Defaults: 80 % / 7000 rpm / 10 km/h / 20°.
-- Apply it with the editor's **Flat-shift retard** button, or `tools/patch_flatshift_retard.py`.
+- Apply it with the editor's **Flat-shift** button, or `tools/patch_flatshift_retard.py`.
   The four values then appear in the tree under **Patch - Flat Shift Ignition Retard**
   (out-of-range input is rejected). Details: `docs/tuning_flatshift_ja.md` (Japanese).
 - It changes ignition control and raises exhaust temperature. **Validate on a bench ECU first**
@@ -95,11 +105,12 @@ python ncec_editor.py
 
 1. **Open ROM** — load your dump (`.bin`, 1 MB).
 2. Pick a map in the left tree, edit cells (press Enter). Checksums are corrected on save.
-3. **Live ▶** — connect to the running ECU (OBD-II / CAN) for live monitoring;
+3. **Live ▶** — connect to the running ECU (OBD-II / CAN) for live monitoring. Slow-changing PIDs are
+   polled less often (see `DEFAULT_PID_INTERVALS` in `ncecu/livelog.py`) so fast PIDs (RPM etc.) update faster;
    **Dashboard** shows gauge tiles; **記録 ● (Record)** / **リプレイ (Replay)** for logs.
 4. **Read ECU** to dump the ECU; **Compare ECU** / **Compare ROMs** for diffs.
 5. **ECU書き込み (ECU Write)** to flash (spare / bench ECU recommended; SBL required).
-6. **Flat-shift retard** to apply the ignition-retard patch (draft) to the open ROM.
+6. **Flat-shift** (ignition-retard draft), **Anti-lag** (overrun pops; pick A/B/C), and **DBW throttle** (1:1) apply their patches to the open ROM and show which maps changed.
 7. Toggle **JA / EN** with the language button; **Help** shows `docs/editor_help_ja.md`.
 8. `python tools/gen_manual.py` generates a full PDF manual of every map.
 
@@ -109,6 +120,10 @@ python ncec_editor.py
 |---|---|
 | `map_analysis.html` / `map_analysis_EN.md` | Full map analysis (English) |
 | `map_analysis_JA.html` / `map_analysis_JA.md` | Full map analysis (Japanese) |
+| `tuning_basics_ja.md` | Engine tuning basics for the NA LF-VE: air/fuel/spark, AFR, timing, limiters, DBW, workflow (JA) |
+| `tuning_throttle_ja.md` | Throttle 1:1 (cable-like response): pedal maps, control+monitor copies, generator (JA) |
+| `live_ramread_ja.md` | Live RAM read via Mode23: KR/clutch/EGT dashboard tiles, config, user-applied enable patch (JA) |
+| `dashboard_chart_ja.md` | Dashboard display modes + smooth update, and the log analysis chart (JA) |
 | `tuning_flatshift_ja.md` | Flat shift: stock throttle cut, spark path, ignition-retard patch, editor steps (JA) |
 | `tuning_overrun_pops_ja.md` | Overrun pops / burble tuning (JA) |
 | `editor_help_ja.md` | Editor help (JA) |

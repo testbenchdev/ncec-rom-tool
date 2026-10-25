@@ -176,13 +176,17 @@ class Flasher:
                       block: int = BLOCK_SIZE) -> None:
         total = len(data)
         sent = 0
+        nblk = 0
         self.log(f"TransferData ({label}): {total} bytes, {block}B/block")
         while sent < total:
             chunk = data[sent:sent + block]
             self._req(bytes([0x36]) + chunk, timeout=10.0)
             sent += len(chunk)
+            nblk += 1
             if progress:
                 progress(sent, total)
+            elif nblk % 64 == 0 or sent >= total:   # 進捗を時々ログ(無反応に見せない=中断防止)
+                self.log(f"  ... {label} {sent}/{total} ({100 * sent // total}%)")
 
     def transfer_exit(self) -> None:
         self.log("TransferExit 37 ...")
@@ -278,6 +282,19 @@ class Flasher:
         if not confirm:
             self.log("[ドライラン] confirm=False のため書き込みは行いません。")
             return plan
+
+        # ---- 安全ガード(実書き込み直前・CAN通信より前に中止する)----
+        # このパイプラインは NC1・フル書き込み(flash_start=0x2000)専用。
+        # DOWNLOAD_ADDR/SIZE が固定(実機が受理する唯一値)のため、ここを外れると
+        # RequestDownload で宣言したサイズと実転送量が食い違い、書き込みが壊れる。
+        if flash_start != ROM_FLASH_START_MIN:
+            raise FlashError(
+                f"フル書き込み(flash_start=0x{ROM_FLASH_START_MIN:X})のみ対応です"
+                f"(指定 0x{flash_start:X})。部分書き込みは未対応のため中止します。")
+        if generation != "NC1":
+            raise FlashError(
+                f"この書き込み手順は NC1 専用です(検出={generation})。"
+                "NC1 以外の ROM/SBL での書き込みは中止します。")
 
         # ---- 実書き込み(消去を伴う不可逆操作)----
         self.authenticate()

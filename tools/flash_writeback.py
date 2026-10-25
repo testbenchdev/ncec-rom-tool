@@ -60,13 +60,18 @@ def read_id(diag: DiagClient, tag: str) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sbl", help="SBL バイナリ(0x1800バイト, NC1/start=0x2000)")
+    ap.add_argument("--rom", help="書き込むROM(既定=ncec_rom_dump.bin)。編集ROMはこれで指定")
     ap.add_argument("--confirm", action="store_true", help="実際に消去+書き込みを行う(不可逆)")
+    ap.add_argument("--verify-u16", help="書込み後、このアドレス(hex)の16bit(BE)を読み戻して表示")
     args = ap.parse_args()
 
-    rom = DUMP.read_bytes()
+    pristine = DUMP.read_bytes()
+    rom = pathlib.Path(args.rom).read_bytes() if args.rom else pristine
+    edited = (rom != pristine)
     sbl = pathlib.Path(args.sbl).read_bytes() if args.sbl else None
+    romname = (args.rom or DUMP.name)
     out(f"flash_writeback {datetime.datetime.now().isoformat(timespec='seconds')}")
-    out(f"ダンプ: {DUMP.name}  size=0x{len(rom):X}  SBL: "
+    out(f"ROM: {romname}  size=0x{len(rom):X}  {'[編集ROM=純正ダンプと差分あり]' if edited else '[無改変=純正ダンプ]'}  SBL: "
         f"{(args.sbl + ' (0x%X)' % len(sbl)) if sbl else '(なし=ドライラン)'}")
 
     bus = open_bus()
@@ -100,14 +105,36 @@ def main() -> None:
         after = read_id(diag, "書き込み後")
 
         out("[4] 判定")
-        ok = True
-        for k in ("CALID", "CVN"):
-            b, a = before.get(k), after.get(k)
-            same = (b is not None and b == a)
-            ok = ok and same
-            out(f"  {k}: {'一致' if same else '不一致!'}  前={b}  後={a}")
-        out("  => " + ("★ 成功: 書き込みパイプライン実証(内容バイト同一・ECU健全)"
-                       if ok else "⚠ 不一致: 要確認(電源入れ直しで復帰を試す)"))
+        cb, ca = before.get("CALID"), after.get("CALID")
+        vb, va = before.get("CVN"), after.get("CVN")
+        calid_ok = (cb is not None and cb == ca)
+        cvn_same = (vb is not None and vb == va)
+        out(f"  CALID: {'一致' if calid_ok else '不一致!'}  前={cb}  後={ca}")
+        if edited:
+            # 編集ROM: 校正領域を変えたので CVN は「変わる」のが正常。
+            out(f"  CVN: {'変化(編集反映=正常)' if not cvn_same else '不変(!)編集が効いていない可能性'}  前={vb}  後={va}")
+            ok = calid_ok and (not cvn_same) and (va is not None)
+            out("  => " + ("★ 成功: 編集ROM書込み・ECU健全(CALID不変・CVN変化=校正更新反映)"
+                           if ok else "⚠ 要確認: CALID不一致 or CVN不変 or 無応答(電源入れ直し+probeで確認)"))
+        else:
+            ok = calid_ok and cvn_same
+            out(f"  CVN: {'一致' if cvn_same else '不一致!'}  前={vb}  後={va}")
+            out("  => " + ("★ 成功: 書き込みパイプライン実証(内容バイト同一・ECU健全)"
+                           if ok else "⚠ 不一致: 要確認(電源入れ直しで復帰を試す)"))
+
+        if args.verify_u16:
+            addr = int(args.verify_u16, 16)
+            out(f"[5] 読み戻し確認 @0x{addr:X} (Mode23)")
+            try:
+                f.authenticate()
+                data = f.read_memory(addr, 2)
+                val = (data[0] << 8) | data[1]
+                exp = (rom[addr] << 8) | rom[addr + 1]
+                out(f"  実機={val} (0x{val:04X})  期待(書込ROM)={exp} (0x{exp:04X})  "
+                    f"{'一致=パッチ反映確認' if val == exp else '不一致!'}")
+                out("  ※ 読み戻しでプログラミングセッションに入ったので、車両搭載前に一度電源を入れ直すこと。")
+            except Exception as e:  # noqa
+                out(f"  読み戻し失敗(致命ではない): {type(e).__name__}: {e}")
     except Exception as e:  # noqa: BLE001
         out(f"!! 例外: {type(e).__name__}: {e}")
         raise

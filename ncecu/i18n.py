@@ -1327,7 +1327,9 @@ UI = {
         "- Checksums are corrected automatically on save.\n"
         "- Always keep your read-out dump before flashing.\n\n"
         "Enable axis editing?"),
-    "fs_patch": ("点火リタード", "Flat-shift retard"),
+    "fs_patch": ("フラットシフト", "Flat-shift"),
+    "al_patch": ("アンチラグ", "Anti-lag"),
+    "th_patch": ("電スロチューニング", "DBW throttle"),
     "fs_title": ("フラットシフト点火リタード", "Flat-shift ignition retard"),
     "fs_confirm": (
         "このROMにフラットシフト用の点火リタード・パッチ(第3ドラフト)を当てます。\n\n"
@@ -1353,6 +1355,17 @@ UI = {
                    "This ROM already has the patch. Edit the values under 'Patch - Flat Shift Ignition Retard'."),
     "fs_unsupported": ("このROMには適用できません(未対応ROM、または別のパッチと衝突しています)。\n{err}",
                        "Cannot apply to this ROM (unsupported, or conflicts with another patch).\n{err}"),
+    "menu_settings": ("設定", "Settings"),
+    "menu_live_intervals": ("ライブPID間引き…", "Live PID intervals…"),
+    "li_title": ("ライブPID間引き設定", "Live PID poll intervals"),
+    "li_note": ("変化のゆっくりしたPIDの問い合わせ間隔を設定します(1要求=最大6PID)。\n「毎回」の項目を6個以内にすると、回転数など速いPIDの更新が最速になります。",
+                "Set how often each PID is polled (up to 6 PIDs per request).\nKeep the 'every cycle' items within 6 for the fastest RPM update."),
+    "li_every": ("毎回", "Every cycle"),
+    "li_estimate": ("毎回: {n}項目 → 定常 {req} 要求/周期", "Every cycle: {n} PIDs -> {req} request(s)/cycle"),
+    "li_apply": ("適用", "Apply"),
+    "li_cancel": ("キャンセル", "Cancel"),
+    "li_reset": ("既定に戻す", "Reset to defaults"),
+    "li_saved": ("保存しました。次回のLive接続から有効です(接続中なら即時反映)。", "Saved. Applies from the next Live connection (immediately if connected)."),
     "range_title": ("入力値エラー", "Value error"),
     "extra_note": ("✓ 追加項目(LibreTuner定義には無い。ncecu/flatshift.py で定義)。番地と意味は逆アセンブル＋エミュレータで確認済み。範囲外の入力は受け付けません。",
                    "✓ Extra item (not in the LibreTuner definition; defined in ncecu/flatshift.py). Address and meaning verified by disassembly + emulator. Out-of-range input is rejected."),
