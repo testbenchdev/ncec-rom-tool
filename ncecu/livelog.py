@@ -78,8 +78,11 @@ EXTRA_PIDS = [0x49, 0x4A, 0x06, 0x07, 0x15, 0x34, 0x44, 0x33, 0x2C, 0x2E, 0x1F]
 #   Count/Event は cal 由来で確度高、Magnitude/Retard は確度中(実車で確認)。
 # 番地は候補。実車で確認し、必要なら ram_reads.json で変更すること。
 RAM_CHANNELS = [
-    {"ch": 0x101, "addr": 0xFFFF6FCC, "type": "u8", "role": "CLUTCH",
-     "name": "クラッチ", "unit": "", "interval": 0.2},
+    # 0xFFFF6FCC は実車確認の結果「クラッチ」ではなく減速ステータス(Decel Status)だった。
+    #   0=駆動中(ギア入・アクセルON) / 1=減速コースト・ニュートラル・アイドル・停止。
+    #   定義「Decel Transition … Hold Decel Status | In-Gear」に対応。旧role名 CLUTCH は誤り。
+    {"ch": 0x101, "addr": 0xFFFF6FCC, "type": "u8", "role": "DECEL",
+     "name": "減速ステータス", "unit": "", "interval": 0.2},
     {"ch": 0x102, "addr": 0xFFFF7C4C, "type": "f32", "role": "KR",
      "name": "KR(ノック遅角・候補)", "unit": "°", "interval": 0.5},
     {"ch": 0x103, "addr": 0xFFFF777C, "type": "f32", "role": "EGT",
@@ -91,6 +94,9 @@ RAM_CHANNELS = [
      "name": "ノック強度(候補)", "unit": "", "interval": 0.2},
     {"ch": 0x106, "addr": 0xFFFF7C44, "type": "f32", "role": "KNOCKRTD",
      "name": "ノックリタード(適用・候補)", "unit": "°", "interval": 0.5},
+    # クラッチスイッチ(実車のRAM差分で特定・ROM参照14箇所の本家入力)。0=離す/1=踏む。
+    {"ch": 0x107, "addr": 0xFFFF7100, "type": "u8", "role": "CLUTCH",
+     "name": "クラッチ", "unit": "", "interval": 0.2},
 ]
 
 

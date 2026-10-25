@@ -1006,7 +1006,7 @@ class Editor(tk.Tk):
                 lines = [line1, line2, line3]
                 if self.ram_reads:
                     if lr.mode23_ok is False:
-                        lines.append("RAM(KR/クラッチ/排気温/ノック): Mode23未有効化のため読めません")
+                        lines.append("RAM(クラッチ/KR/減速/排気温/ノック): Mode23未有効化のため読めません")
                     else:
                         rv = []
                         for c in self.ram_reads:
@@ -1538,7 +1538,7 @@ class Editor(tk.Tk):
         return self.live_pid_overrides.get(pid, livelog.DEFAULT_PID_INTERVALS.get(pid, 0.0))
 
     def open_live_intervals(self):
-        """ライブ計測のPIDごと＋ライブRAM(KR/クラッチ/排気温/ノック)の問い合わせ間隔を設定。"""
+        """ライブ計測のPIDごと＋ライブRAM(クラッチ/KR/減速/排気温/ノック)の問い合わせ間隔を設定。"""
         pids = list(livelog.DEFAULT_PIDS) + list(livelog.EXTRA_PIDS)
         win = tk.Toplevel(self)
         win.title(i18n.ui("li_title"))
@@ -1586,7 +1586,7 @@ class Editor(tk.Tk):
         # --- ライブRAM読み出し(Mode23) チャンネルの間隔 ---
         ram_vars = {}
         if self.ram_reads:
-            hdr = ("ライブRAM読み出し（Mode23：KR/クラッチ/排気温/ノック）"
+            hdr = ("ライブRAM読み出し（Mode23：クラッチ/KR/減速/排気温/ノック）"
                    if self.lang == "ja" else "Live RAM reads (Mode23: KR/clutch/EGT/knock)")
             tk.Label(win, text=hdr, bg="#1e2128", fg="#b9c6da", anchor="w",
                      font=(self.jp, 9)).pack(fill="x", padx=10, pady=(6, 0))
