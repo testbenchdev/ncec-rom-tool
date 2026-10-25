@@ -5,6 +5,12 @@ ncec_rom_dump.bin
 # ECU書き込みに必要な SBL / 非公開IP(持っていても公開しない)
 *_sbl.bin
 sbl*.bin
+/Decryption_sbl/
+# 配布zip(全部入り=ROM/SBL/defs を含む)とその展開コピー=絶対に公開しない
+*.zip
+/NCEC_ROM_Tool_v*/
+# 引き継ぎ資料(VIN・作業パス等の個人情報を含む=公開しない)
+docs/PROJECT_HANDOFF_ja.md
 # サードパーティ製マニュアル(ルネサス等の著作物)
 docs/sh7058_plain_manual.pdf
 REN_*.pdf
@@ -31,6 +37,8 @@ logs/
 *.raw
 candump*.raw
 dashboard_layout.json
+live_intervals.json
+ram_reads.json
 
 # === 生成物(任意。配布したければ除外から外す) ===
 docs/_manual_img/

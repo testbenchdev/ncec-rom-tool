@@ -60,6 +60,7 @@ class TableChange:
     address: int
     ncells: int
     samples: list[tuple[int, int, object, object]]  # (row, col, old, new)
+    scaling: str = ""  # 表示書式(sc.fmt)をエディタ側で引くための定義スケーリング名
 
 
 @dataclass
@@ -89,7 +90,8 @@ def table_changes(a: bytes, b: bytes, romdef, max_samples: int = 8) -> list[Tabl
                     if len(samples) < max_samples:
                         samples.append((i, j, ga[i][j], gb[i][j]))
         if ncells:
-            out.append(TableChange(t.name, t.category, t.address, ncells, samples))
+            out.append(TableChange(t.name, t.category, t.address, ncells, samples,
+                                   getattr(t, "scaling", "") or ""))
     return out
 
 

@@ -46,25 +46,24 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 @media print{.top,.toc{display:none}body{font-size:11px}.cat,.flowwrap{break-inside:avoid;border-color:#bbb}svg.flow .n{stroke:#999}}
 </style></head><body><div class="wrap" id="top">
 <h1>NCEC ECU マップ解析 &mdash; 総集編（日本語）</h1>
-<p class="sub">Mazda NCEC（ロードスター / MX-5）予備ECU ・ Renesas SH7058 ・ CAL ID <b>LFG7EG</b> ・ ベースROM <code>ncec_rom_dump.bin</code> ・ LibreTuner 定義 ・ 126カテゴリ / 909テーブルを全数調査 ・ 生成 2026-10-09。</p>
-<div class="warn">⚠ 本資料は<b>ベンチECU 1台での値・単位の確認</b>に基づく解析メモです。<b>実機書込みは未実施</b>（SBL未入手のためフラッシュ不可）。数値は当該個体（1台）の実測で、他個体・他CALで異なる場合があります。<span class="badge fix">i18n修正</span> のカテゴリは <code>ncecu/i18n.py</code> で単位/軸ラベル/訳を修正したもの（詳細は <code>unit_fixes_i18n.md</code>）。</div>
+<p class="sub">Mazda NCEC（ロードスター / MX-5）予備ECU ・ Renesas SH7058 ・ CAL ID <b>LFG7EG</b> ・ ベースROM <code>ncec_rom_dump.bin</code> ・ LibreTuner 定義 ・ 126カテゴリ / 909テーブルを全数調査 ・ 生成 2026-10-09 ・ 更新 2026-10-12（フラッシュ状況など現状を反映）。</p>
+<div class="warn">⚠ 本資料は<b>ベンチECU 1台での値・単位の確認</b>に基づく解析メモです。実機フラッシュは<b>SBL入手済で検証済み</b>：予備/ベンチECUに加え、<b>車上のOBD2ポート（CAN-H/CAN-L/GND）経由の書き込みにも成功</b>（いずれも既存の DSD TECH SH-C30L のみ・追加I/F不要。手段＝無改変の読み戻し＋イモビ無効化などの編集フラッシュを実機確認）。対象は自分のECU／車両に限る。数値は当該個体（1台）の実測で、他個体・他CALで異なる場合があります。<span class="badge fix">i18n修正</span> のカテゴリは <code>ncecu/i18n.py</code> で単位/軸ラベル/訳を修正したもの（詳細は <code>unit_fixes_i18n.md</code>）。</div>
 <h2 id="flow">マップの関係性 — フローチャート</h2>
 <p class="sub">カテゴリ同士のつながり。色は下の目次と同じサブシステムを表します。</p>
 <figure class="flowwrap">
 
 <svg viewBox="0 0 980 560" class="flow" role="img" aria-label="ECU全体制御フロー">
 <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" class="arh"/></marker></defs>
-<rect x="40" y="40" width="220" height="52" rx="7" class="n s"/><text x="150.0" y="63.5" class="t">センサ</text><text x="150.0" y="78.5" class="t">MAF・MAP・水温・吸気温・TPS/APP・CKP/CMP・ノック・O2・車速・気圧</text><rect x="360" y="120" width="260" height="52" rx="7" class="n h"/><text x="490.0" y="136.0" class="t">エアフロ &amp; 負荷算出</text><text x="490.0" y="151.0" class="t">MAF Scaling → Load Scaling（VE）</text><text x="490.0" y="166.0" class="t">MAP（補助）→ エンジン負荷</text><rect x="60" y="270" width="240" height="82" rx="7" class="n f"/><text x="180.0" y="293.5" class="t">燃料系</text><text x="180.0" y="308.5" class="t">目標AFR（CL/OL）・基本IPW</text><text x="180.0" y="323.5" class="t">各種補正・O2フィードバック</text><text x="180.0" y="338.5" class="t">（STFT / LTFT）</text><rect x="370" y="270" width="240" height="82" rx="7" class="n k"/><text x="490.0" y="293.5" class="t">点火系</text><text x="490.0" y="308.5" class="t">ベース進角（燃料要求別）</text><text x="490.0" y="323.5" class="t">+温度/冷間/EGR/ノック/アイドル/急開</text><text x="490.0" y="338.5" class="t">→上限→気筒別→ドウェル</text><rect x="690" y="270" width="250" height="82" rx="7" class="n a"/><text x="815.0" y="293.5" class="t">空気 / トルク / スロットル</text><text x="815.0" y="308.5" class="t">ペダル → 要求トルク（BMEP）</text><text x="815.0" y="323.5" class="t">→ DBWスロットル・クレコン</text><text x="815.0" y="338.5" class="t">VVT / IMRC / IMTV → VE</text><rect x="40" y="392" width="250" height="46" rx="7" class="n o"/><text x="165.0" y="420.0" class="t">インジェクタ（噴射時間）</text><rect x="370" y="392" width="240" height="46" rx="7" class="n o"/><text x="490.0" y="420.0" class="t">点火コイル（火花）</text><rect x="690" y="392" width="250" height="46" rx="7" class="n o"/><text x="815.0" y="420.0" class="t">スロットルアクチュエータ</text><rect x="40" y="470" width="900" height="66" rx="7" class="n m"/><text x="490.0" y="508.0" class="t">横断層： リミッタ（回転/車速/負荷の過回転・クランプ）  ・  安全監視/トルク・スロットル監視（フェイルセーフ, DTC P0601）  ・  診断（DTCフラグ&amp;しきい値）  ・  排ガス（触媒推定/EGR/EVAP）  ・  ファン制御  ・  ギア判定</text>
-<path class="e" d="M150,92 L150,120" marker-end="url(#ar)"/>
-<path class="e" d="M490,150 L490,180" marker-end="url(#ar)"/>
-<path class="e" d="M300,232 L180,270" marker-end="url(#ar)"/>
-<path class="e" d="M490,232 L490,270" marker-end="url(#ar)"/>
-<path class="e" d="M680,232 L800,270" marker-end="url(#ar)"/>
+<rect x="40" y="38" width="220" height="62" rx="7" class="n s"/><text x="150.0" y="57.0" class="t">センサ</text><text x="150.0" y="73.0" class="t">MAF・MAP・水温・吸気温・TPS/APP</text><text x="150.0" y="89.0" class="t">CKP/CMP・ノック・O2・車速・気圧</text><rect x="360" y="120" width="260" height="52" rx="7" class="n h"/><text x="490.0" y="136.0" class="t">エアフロ &amp; 負荷算出</text><text x="490.0" y="151.0" class="t">MAF Scaling → Load Scaling（VE）</text><text x="490.0" y="166.0" class="t">MAP（補助）→ エンジン負荷</text><rect x="60" y="270" width="240" height="82" rx="7" class="n f"/><text x="180.0" y="293.5" class="t">燃料系</text><text x="180.0" y="308.5" class="t">目標AFR（CL/OL）・基本IPW</text><text x="180.0" y="323.5" class="t">各種補正・O2フィードバック</text><text x="180.0" y="338.5" class="t">（STFT / LTFT）</text><rect x="370" y="270" width="240" height="82" rx="7" class="n k"/><text x="490.0" y="293.5" class="t">点火系</text><text x="490.0" y="308.5" class="t">ベース進角（燃料要求別）</text><text x="490.0" y="323.5" class="t">+温度/冷間/EGR/ノック/アイドル/急開</text><text x="490.0" y="338.5" class="t">→上限→気筒別→ドウェル</text><rect x="690" y="270" width="250" height="82" rx="7" class="n a"/><text x="815.0" y="293.5" class="t">空気 / トルク / スロットル</text><text x="815.0" y="308.5" class="t">ペダル → 要求トルク（BMEP）</text><text x="815.0" y="323.5" class="t">→ DBWスロットル・クレコン</text><text x="815.0" y="338.5" class="t">VVT / IMRC / IMTV → VE</text><rect x="40" y="392" width="250" height="46" rx="7" class="n o"/><text x="165.0" y="420.0" class="t">インジェクタ（噴射時間）</text><rect x="370" y="392" width="240" height="46" rx="7" class="n o"/><text x="490.0" y="420.0" class="t">点火コイル（火花）</text><rect x="690" y="392" width="250" height="46" rx="7" class="n o"/><text x="815.0" y="420.0" class="t">スロットルアクチュエータ</text><rect x="40" y="468" width="900" height="70" rx="7" class="n m"/><text x="490.0" y="497.0" class="t">横断層： リミッタ（回転/車速/負荷の過回転・クランプ）  ・  安全監視/トルク・スロットル監視（フェイルセーフ, DTC P0601）</text><text x="490.0" y="519.0" class="t">診断（DTCフラグ&amp;しきい値）  ・  排ガス（触媒推定/EGR/EVAP）  ・  ファン制御  ・  ギア判定</text>
+<path class="e" d="M200,100 L400,120" marker-end="url(#ar)"/>
+<path class="e" d="M490,172 L185,270" marker-end="url(#ar)"/>
+<path class="e" d="M490,172 L490,270" marker-end="url(#ar)"/>
+<path class="e" d="M490,172 L805,270" marker-end="url(#ar)"/>
 <path class="e" d="M165,352 L165,392" marker-end="url(#ar)"/>
 <path class="e" d="M490,352 L490,392" marker-end="url(#ar)"/>
 <path class="e" d="M815,352 L815,392" marker-end="url(#ar)"/>
-<text x="250" y="258" class="lbl">負荷・回転</text>
-<text x="560" y="258" class="lbl">負荷・回転</text>
+<text x="300" y="228" class="lbl">負荷・回転</text>
+<text x="680" y="228" class="lbl">負荷・回転</text>
 </svg>
 
 <figcaption>1. 全体制御フロー — センサからエアフロ/負荷推定（全マップの縦軸）を作り、回転と合わせて燃料・点火・空気/トルクの3系統を駆動。リミッタ・トルク/スロットル監視・診断・排ガスが周囲を囲む。</figcaption>
@@ -73,13 +72,13 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 
 <svg viewBox="0 0 980 520" class="flow" role="img" aria-label="燃料系フロー">
 <defs><marker id="arf" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" class="arh"/></marker></defs>
-<rect x="60" y="44" width="240" height="52" rx="7" class="n h"/><text x="180.0" y="75.0" class="t">エアフロ（MAF → Load Scaling / VE）</text><rect x="420" y="18" width="300" height="52" rx="7" class="n a"/><text x="570.0" y="41.5" class="t">目標AFR — 燃料状態OLが</text><text x="570.0" y="56.5" class="t">CLストイキ vs OLパワー増量を選択（APP/負荷）</text><rect x="60" y="140" width="240" height="56" rx="7" class="n f"/><text x="180.0" y="165.5" class="t">基本噴射</text><text x="180.0" y="180.5" class="t">IPW Base・Offset&amp;Scaling・最小</text><rect x="60" y="236" width="240" height="70" rx="7" class="n f"/><text x="180.0" y="261.0" class="t">過渡/状態補正</text><text x="180.0" y="276.0" class="t">暖機・始動（触媒）・負荷急増</text><text x="180.0" y="291.0" class="t">動的トリム（壁流れA/B/C）・IMRC</text><rect x="430" y="236" width="220" height="70" rx="7" class="n f"/><text x="540.0" y="261.0" class="t">減速 燃料カット/復帰</text><text x="540.0" y="276.0" class="t">（+アイドル復帰判定）</text><text x="540.0" y="291.0" class="t">点火補正増量</text><rect x="720" y="236" width="210" height="70" rx="7" class="n k"/><text x="825.0" y="261.0" class="t">O2フィードバック（前）</text><text x="825.0" y="276.0" class="t">STFT → LTFT（学習）</text><text x="825.0" y="291.0" class="t">（MAF区切り）</text><rect x="720" y="120" width="210" height="60" rx="7" class="n o"/><text x="825.0" y="147.5" class="t">噴射時間</text><text x="825.0" y="162.5" class="t">→ インジェクタ</text><rect x="60" y="330" width="870" height="40" rx="7" class="n m"/><text x="495.0" y="355.0" class="t">パッチ（コード）： DFCO無効化  ・  開ループSTFT修正  ・  CL目標パッチ（自由なCL AFR目標）</text><rect x="430" y="120" width="220" height="52" rx="7" class="n s"/><text x="540.0" y="143.5" class="t">リアO2 → 触媒監視</text><text x="540.0" y="158.5" class="t">（効率/無反応）— 燃調ではない</text>
+<rect x="60" y="44" width="240" height="52" rx="7" class="n h"/><text x="180.0" y="75.0" class="t">エアフロ（MAF → Load Scaling / VE）</text><rect x="420" y="16" width="300" height="68" rx="7" class="n a"/><text x="570.0" y="37.0" class="t">目標AFR — 燃料状態OLが</text><text x="570.0" y="53.0" class="t">CLストイキ vs OLパワー増量を選択</text><text x="570.0" y="69.0" class="t">（APP / 負荷で切替）</text><rect x="60" y="140" width="240" height="56" rx="7" class="n f"/><text x="180.0" y="165.5" class="t">基本噴射</text><text x="180.0" y="180.5" class="t">IPW Base・Offset&amp;Scaling・最小</text><rect x="60" y="236" width="240" height="70" rx="7" class="n f"/><text x="180.0" y="261.0" class="t">過渡/状態補正</text><text x="180.0" y="276.0" class="t">暖機・始動（触媒）・負荷急増</text><text x="180.0" y="291.0" class="t">動的トリム（壁流れA/B/C）・IMRC</text><rect x="430" y="236" width="220" height="70" rx="7" class="n f"/><text x="540.0" y="261.0" class="t">減速 燃料カット/復帰</text><text x="540.0" y="276.0" class="t">（+アイドル復帰判定）</text><text x="540.0" y="291.0" class="t">点火補正増量</text><rect x="720" y="236" width="210" height="70" rx="7" class="n k"/><text x="825.0" y="261.0" class="t">O2フィードバック（前）</text><text x="825.0" y="276.0" class="t">STFT → LTFT（学習）</text><text x="825.0" y="291.0" class="t">（MAF区切り）</text><rect x="720" y="120" width="210" height="60" rx="7" class="n o"/><text x="825.0" y="147.5" class="t">噴射時間</text><text x="825.0" y="162.5" class="t">→ インジェクタ</text><rect x="60" y="330" width="870" height="40" rx="7" class="n m"/><text x="495.0" y="355.0" class="t">パッチ（コード）： DFCO無効化  ・  開ループSTFT修正  ・  CL目標パッチ（自由なCL AFR目標）</text><rect x="430" y="120" width="220" height="52" rx="7" class="n s"/><text x="540.0" y="143.5" class="t">リアO2 → 触媒監視</text><text x="540.0" y="158.5" class="t">（効率/無反応）— 燃調ではない</text>
 <path class="e" d="M180,96 L180,140" marker-end="url(#arf)"/>
-<path class="e" d="M470,70 L300,140" marker-end="url(#arf)"/>
+<path class="e" d="M470,84 L300,140" marker-end="url(#arf)"/>
 <path class="e" d="M180,196 L180,236" marker-end="url(#arf)"/>
 <path class="e" d="M300,268 L430,268" marker-end="url(#arf)"/>
 <path class="e" d="M650,268 L720,268" marker-end="url(#arf)"/>
-<path class="e" d="M770,236 L770,196" marker-end="url(#arf)"/>
+<path class="e" d="M770,236 L770,182" marker-end="url(#arf)"/>
 <text x="330" y="262" class="lbl">+各種補正</text>
 </svg>
 
@@ -92,9 +91,10 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <rect x="90" y="44" width="320" height="52" rx="7" class="n k"/><text x="250.0" y="60.0" class="t">ベース進角マップ</text><text x="250.0" y="75.0" class="t">低 / 高 燃料要求（移行で切替）</text><text x="250.0" y="90.0" class="t">通常 / IMRC列</text><rect x="90" y="140" width="320" height="80" rx="7" class="n c"/><text x="250.0" y="162.5" class="t">加算/補正（°）</text><text x="250.0" y="177.5" class="t">水温-吸気温補正・冷間進角・EGR進角</text><text x="250.0" y="192.5" class="t">ノックリタード（KS検出→KR）</text><text x="250.0" y="207.5" class="t">急開（発進/1速/高速/アンチラグ/共通）</text><rect x="90" y="260" width="320" height="64" rx="7" class="n c"/><text x="250.0" y="282.0" class="t">アイドルガバナ &amp; 移行</text><text x="250.0" y="297.0" class="t">アイドル上限/偏差/AC-PS断続</text><text x="250.0" y="312.0" class="t">減速復帰/走行→アイドル/息つき</text><rect x="730" y="140" width="210" height="64" rx="7" class="n k"/><text x="835.0" y="162.0" class="t">上限 / クランプ</text><text x="835.0" y="177.0" class="t">Spark Base Limit</text><text x="835.0" y="192.0" class="t">→ Spark Limits（最終）</text><rect x="730" y="250" width="210" height="60" rx="7" class="n k"/><text x="835.0" y="270.0" class="t">最終段</text><text x="835.0" y="285.0" class="t">Attackレート制限</text><text x="835.0" y="300.0" class="t">気筒別トリム</text><rect x="90" y="360" width="320" height="40" rx="7" class="n o"/><text x="250.0" y="385.0" class="t">コイル通電（ドウェル, ms）</text><rect x="730" y="340" width="210" height="40" rx="7" class="n o"/><text x="835.0" y="365.0" class="t">点火出力 → コイル</text>
 <path class="e" d="M250,96 L250,140" marker-end="url(#ars)"/>
 <path class="e" d="M250,220 L250,260" marker-end="url(#ars)"/>
-<path class="e" d="M470,172 L730,172" marker-end="url(#ars)"/>
+<path class="e" d="M410,172 L730,172" marker-end="url(#ars)"/>
 <path class="e" d="M250,324 L250,360" marker-end="url(#ars)"/>
-<path class="e" d="M470,390 L730,300" marker-end="url(#ars)"/>
+<path class="e" d="M835,204 L835,250" marker-end="url(#ars)"/>
+<path class="e" d="M835,310 L835,340" marker-end="url(#ars)"/>
 </svg>
 
 <figcaption>3. 点火系 — 燃料要求別のベース進角マップに、温度/冷間/EGR/ノック/アイドル/急開の補正を加え、Spark Base Limit→Spark Limitsでクランプ、気筒別に配分しドウェルとして出力。</figcaption>
@@ -106,10 +106,11 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <rect x="90" y="34" width="240" height="52" rx="7" class="n a"/><text x="210.0" y="57.5" class="t">ペダル（APP）</text><text x="210.0" y="72.5" class="t">→ 目標スロットルデューティ（ギア別）</text><rect x="90" y="120" width="240" height="60" rx="7" class="n a"/><text x="210.0" y="147.5" class="t">要求トルクモデル（BMEP）</text><text x="210.0" y="162.5" class="t">+ クルーズコントロール目標</text><rect x="90" y="214" width="240" height="52" rx="7" class="n a"/><text x="210.0" y="237.5" class="t">スロットル角変換</text><text x="210.0" y="252.5" class="t">（% → 度）</text><rect x="560" y="120" width="300" height="60" rx="7" class="n m"/><text x="710.0" y="140.0" class="t">安全監視（フェイルセーフ）</text><text x="710.0" y="155.0" class="t">スロットルデューティ&amp;要求トルクしきい値</text><text x="710.0" y="170.0" class="t">→ DTC P0601 / リンプ</text><rect x="560" y="214" width="300" height="60" rx="7" class="n a"/><text x="710.0" y="241.5" class="t">VVT（VCT目標）・IMRC・IMTV</text><text x="710.0" y="256.5" class="t">VE変化 → 負荷へフィードバック</text><rect x="90" y="300" width="240" height="50" rx="7" class="n o"/><text x="210.0" y="330.0" class="t">スロットルアクチュエータ</text><rect x="560" y="300" width="300" height="50" rx="7" class="n i"/><text x="710.0" y="322.5" class="t">アイドル制御（ベース/上限, 補正,</text><text x="710.0" y="337.5" class="t">移行遅延）— スロットル&amp;点火を調整</text><rect x="90" y="382" width="770" height="34" rx="7" class="n l"/><text x="475.0" y="404.0" class="t">リミッタ上書き： レブリミット→燃料カット/スロットルカット  ・  車速リミッタ  ・  負荷クランプ</text>
 <path class="e" d="M210,86 L210,120" marker-end="url(#ara)"/>
 <path class="e" d="M210,180 L210,214" marker-end="url(#ara)"/>
-<path class="e" d="M410,150 L560,150" marker-end="url(#ara)"/>
-<path class="e" d="M410,244 L560,244" marker-end="url(#ara)"/>
+<path class="e" d="M330,150 L560,150" marker-end="url(#ara)"/>
+<path class="e" d="M330,244 L560,244" marker-end="url(#ara)"/>
 <path class="e" d="M770,180 L770,214" marker-end="url(#ara)"/>
-<path class="e" d="M560,330 L410,330" marker-end="url(#ara)"/>
+<path class="e" d="M560,330 L334,330" marker-end="url(#ara)"/>
+<path class="e" d="M210,266 L210,300" marker-end="url(#ara)"/>
 <text x="470" y="144" class="lbl">監視</text>
 </svg>
 
@@ -128,7 +129,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li><a href="#g-j">J. 安全監視（Data Integrity）</a> <span class="ct">（15）</span></li>
 <li><a href="#g-k">K. 診断（DTC）</a> <span class="ct">（2）</span></li>
 <li><a href="#g-l">L. リミッタ（回転 / 車速 / 負荷）</a> <span class="ct">（5）</span></li>
-<li><a href="#g-m">M. パッチ（コード書換）</a> <span class="ct">（6）</span></li>
+<li><a href="#g-m">M. パッチ（コード書換）</a> <span class="ct">（7）</span></li>
 <li><a href="#g-n">N. センサ / 車両系</a> <span class="ct">（7）</span></li>
 <li><a href="#g-o">O. 作業中（WIP）/ その他</a> <span class="ct">（1）</span></li>
 <li><a href="#g-p">P. 実車比較・リバースエンジニアリング（トルクモデル）</a> <span class="ct">（3）</span></li>
@@ -573,7 +574,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Transition from Idle Add Retard Rate | Timer Expired(1x1, °)=0.7。タイマ満了後に加算分を抜くレート(°/周期)。</li>
 <li>【単位修正(i18n.py)】&#x27;Add Timer&#x27; が カテゴリ spark→° 誤爆で°。実体はタイマ(カウント/時間、角度ではない)→無単位。ルール追加: &#x27;cold advance&#x27; かつ &#x27;add timer&#x27;→&quot;&quot;。&#x27;Add Retard Rate | Timer Expired&#x27; は °/周期のレートなので除外し°維持(コードベースのRate=°慣例に合わせる)。</li>
 <li>回帰確認: 他spark の timer系(Restore Advance Rate=°, Transition Timer Reset=無単位, Retard Multiplier=×, Max Retard=°)は不変。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火補正 - EGR作動時進角 <span class="ct">（4項目）</span></h3>
@@ -586,7 +587,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Spark EGR Advance | Remote Test Mode(13x10, °)=診断/テスト用の別マップ(離散値)。</li>
 <li>読み方: EGRが効く中負荷中回転で進角を厚くし、EGR非作動域(低負荷0.12/高負荷0.69以上/両端回転)は0。実EGR率が目標に満たなければ比係数で進角も比例縮小。</li>
 <li>【単位】全4本 正(進角マップ3本=°, 比係数=×)。誤ラベルなし→コード変更不要。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火補正 - フィードバック(作業中/AT) <span class="ct">（1項目）</span></h3>
@@ -596,7 +597,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Feedback Retard - Maximum | 6E53 Set, 6E5E Set(1x1 float, °)=39.7266°。</li>
 <li>役割: フラグ6E53 Set かつ 6E5E Set の条件で、この補正が入れられる遅角量の上限=約39.73°を規定(安全リミッタ)。軸を持たない定数。</li>
 <li>【単位】° で正(遅角量の上限)。誤ラベルなし→コード変更不要。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火補正 - 高水温時(作業中/AT限定) <span class="ct">（10項目）</span></h3>
@@ -607,7 +608,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>役割(推定): 高水温(オーバーヒート域)でのAT向け点火補正量を離散インデックス(高ECT状態の段階/進行カウンタ)で引く配列。特定段階で一時的に大きく補正しその後戻す曲線。</li>
 <li>符号(進角/遅角)はこのスカラー群だけでは断定不可(呼び出し側ロジック依存)。AT限定・WIP扱いのため実挙動はベンチ要確認。</li>
 <li>【単位】全10本 ° で正(点火補正量)。誤ラベルなし→コード変更不要。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火補正 - 高回転・高水温時の遅角 <span class="ct">（8項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -623,7 +624,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>本個体は Rate/Limit とも0なので、しきい値を満たしても実際の遅角は発生しない(無効化された保護枠)。</li>
 <li>【単位修正(i18n.py)】RPM Threshold[/Hys] と ECT Threshold[/Hys] がカテゴリ &#x27;spark&#x27;→° で誤って°。ルール追加: 名前に &#x27;high rpm and ect retard&#x27; を含む場合、rpm threshold→rpm、ect threshold→°C。Rate/Limit/Restore(°)と Activation Delay(既に無単位)は不変。カテゴリ固有名のため誤爆なし。</li>
 <li>結果: 4本是正(rpm×2, °C×2)。定義名typo &#x27;Sarpk&#x27;(=Spark)は原ファイル由来。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火補正 - ノックリタード(ノック時遅角) <span class="ct">（16項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -647,7 +648,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・KR Decrement Rate | Knock Listen Active=0.17 / Inactive=0.352(°/周期): 遅角を戻す速さ。監視中は遅め、監視外は速め。</li>
 <li>【単位修正(i18n.py)】カテゴリ &#x27;spark&#x27;→° が誤爆し、負荷しきい値・回転しきい値・各Delayまで°だった。ルール追加: カテゴリに &#x27;knock retard&#x27; を含む場合、load→無単位、rpm→rpm、delay→無単位。KR量/最大/増減レート(°)は従来どおり。対象カテゴリ内のみ=誤爆なし。</li>
 <li>結果: 9本是正(負荷2=無単位, 回転4=rpm, Delay3=無単位)、KR量/レート/最大7本は°維持。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。KRはノック保護の要であり、安易な縮小はエンジン保護を弱める。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。KRはノック保護の要であり、安易な縮小はエンジン保護を弱める。</li>
 </ul></div>
 <div class="cat">
 <h3>点火補正 - 息つき/ストール復帰 <span class="ct">（1項目）</span></h3>
@@ -658,7 +659,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>読み方: 低負荷は補正0。負荷が0.25から立ち上がると+3→+6→+10°と進角加算、0.38以上で最大+10°。アイドルで急に負荷が掛かり回転落ち込む場面でトルク補填しエンスト回避。暖機後(ECT&gt;=70)・MT・N・アイドル限定。</li>
 <li>【単位】° で正(点火進角補正量)。誤ラベルなし→コード変更不要。</li>
 <li>【備考】定義名は末尾カンマ付きの未完ラベル(元ファイル由来)。X軸はtip-in系の7DA4とは別の負荷PID 6F44。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火補正 - 急開時アンチラグ(低回転保護) <span class="ct">（9項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -677,7 +678,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>【単位修正(i18n.py)】Minimum RPM Threshold が &#x27;spark&#x27;→° で誤って°。ルール追加: &#x27;anti lug&#x27; かつ &#x27;rpm threshold&#x27;→rpm(anti lug限定)。ROM全体監査の結果、グローバルな rpm threshold→rpm はVCTの&#x27;Correction to Apply | Above RPM Threshold&#x27;(条件)や×乗数/Count Requiredを巻き込むため不可と判断し限定。</li>
 <li>結果: #6 °→rpm のみ是正。Calculated Gear/Retard Limit=°、各Multiplier=×、Req Torque=N·m は正のまま。</li>
 <li>【備考】VCT(DO NOT MODIFY)にも RPM Threshold[/Hys]=7000/93.75 の°誤ラベルが残存。VCTカテゴリ質問時に個別精査。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火補正 - 急開時(1速) <span class="ct">（11項目）</span></h3>
@@ -696,7 +697,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・ZEROED RPM Multiplier | AT, Flag 6E74 Set/Clear(1x11, ×)=全0。</li>
 <li>まとめ: MTはベース12°をTP/RPM/IAT倍率で調整(浅開度・中回転で最大、高温で減衰)。A/C時+11.25°進角。ATは全系ゼロで不使用。</li>
 <li>【単位】全11本 正(Base/Add Advance=°, 各Multiplier=×)。誤ラベルなし→コード変更不要。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火補正 - 急開時(発進) <span class="ct">（5項目）</span></h3>
@@ -710,7 +711,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Multiplier Decrement to 0 | VSS GT 3.76=0.03(×/周期): 車速が付いたら速く抜く。</li>
 <li>動作: ベース遅角を倍率で滑らかに立ち上げ、発進が進むと車速に応じ速やかに解除。A/C Offの方が深い遅角。</li>
 <li>【単位】全5本 正(Base Retard=°, Multiplier Increment/Decrement=×)。誤ラベルなし→コード変更不要。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火補正 - 急開時(高速) <span class="ct">（10項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -725,7 +726,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>【単位修正(i18n.py)】カテゴリ &#x27;spark&#x27;→° 誤爆で Delay と APP Increasing/Decreasing が誤って°。ルール追加: &#x27;tip-in retard high speed&#x27; のとき delay→無単位、app increasing/decreasing→×。Base Retard=°・ZEROED Multiplier=×(後段のmultiplier→×)は温存。</li>
 <li>判定根拠: Delay は datatype=uint8(整数カウント、点火度ではない)。APP Increasing/Decreasing は float・max1.3・値が〜1.0収束で倍率。</li>
 <li>結果: Delay×3 →無単位、APP×2 →×、既存のMultiplier→×/Base Retard→° は不変。他カテゴリにapp increasing/decreasingは無く波及なし。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火補正 - 急開時(共通) <span class="ct">（3項目）</span></h3>
@@ -737,7 +738,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Tip-In Retard Shared - ECT Multipier | MT(typo=Multiplier)=〜60°C:0、70°C:0.5、80〜100°C:0.996。MTは暖機後に急開遅角を有効化、冷間は無効。</li>
 <li>まとめ: MTは暖機後のみ急開遅角を効かせ冷間は0。ATは2枚とも0で急開遅角を使わない。</li>
 <li>【単位】全3本 × で正。誤ラベルなし→コード変更不要。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火補正 - 減速からの復帰 <span class="ct">（9項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -755,7 +756,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・| 8250 Clear, AC Off=0.05 / | 8250 Clear, AC On=0.1 / | 8250 Set, AT=0.05(いずれも1x1, °/周期)。</li>
 <li>【単位】全9本 ° で正(遺角°・戻しレート°/周期)。誤ラベルなし→unit_of変更なし。</li>
 <li>【軸ラベル改善(i18n.py)】X軸 LOAD_DELTA_7C00 が既定 &#x27;LOAD&#x27;→&#x27;エンジン負荷&#x27; で絶対負荷と区別できなかったため、AXIS_SPECIAL に &#x27;LOAD_DELTA&#x27;→『負荷変化量 (Load Delta)』を追加。他のLOAD_*(絶対負荷)は不変を確認。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。定義名の &#x27;Resotre&#x27; は原typo(機能は Restore)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。定義名の &#x27;Resotre&#x27; は原typo(機能は Restore)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火補正 - 走行→アイドル移行 <span class="ct">（5項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -769,7 +770,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Transition Retard Multiplier | Trans Timer Not Expired(1x8, X=アイドル上回転(RPM−IdleSpeed), ×)=移行タイマ未満了の間の遅角倍率。目標回転−200〜0で0(介入なし)、+100で0.8、+200以上で1.0。</li>
 <li>【単位修正(i18n.py)】Transition Timer Reset がカテゴリ &#x27;spark&#x27;→° で誤って°。実体はタイマ/カウントのリセット値。ルール追加: &#x27;timer reset&#x27; を含む→無単位。Fuel側 &#x27;Load Threshold Timer Reset&#x27;(=60, 既に無単位)も同ルールで整合、対象2本のみ=誤爆なし。</li>
 <li>結果: Transition Timer Reset 1本 °→無単位。Retard Limit/Rate=°、Multiplier×2=× は正のまま。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <h2 id="g-d">D. 点火 — ベース / 上限 <span class="ct">（10）</span></h2>
 <div class="cat">
@@ -781,7 +782,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Dwell WIP(1x14, 回転数軸, ms)=0〜0.107msの微小値。回転別のドウェル微補正(トリム)と推定。名称WIP=Work In Progress(試作/未完テーブルの可能性)。絶対ドウェルではない。</li>
 <li>・Dwell Time | Speed Limiter Active(1x1, ms)=0.768ms。速度/回転リミッタ作動時はドウェルを極小に落とし、火花を弱める=点火側でのソフトなトルクカット手段。</li>
 <li>【単位】全3本とも ms で正。誤ラベルなし→コード変更不要。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火時期ベース - 高燃料要求時 <span class="ct">（4項目）</span></h3>
@@ -795,7 +796,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Low-Det (15x14): ノック少×全域。</li>
 <li>値の傾向: 軽負荷側(上行)は進角大(最大〜59.9°)、高負荷側(下行)は遅角(最小〜-20°=低回転高負荷のノック回避)。同条件比較で Low-Det は High-Det より進角(例: 負荷約0.5/2000rpm で High-Det 20.8° vs Low-Det 29.8°)=ノックが出なければ進める設計。</li>
 <li>【単位】全4本とも ° で正。誤ラベルなし→コード変更不要。進角マップは名前に threshold/hysteresis/delay を含まず、前件『移行』の単位修正ブロックにも掛からない(誤爆なし確認済み)。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。進角は最もエンジンを壊しやすい領域のため、実機適用は慎重に。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。進角は最もエンジンを壊しやすい領域のため、実機適用は慎重に。</li>
 </ul></div>
 <div class="cat">
 <h3>点火時期ベース - 高燃料要求への移行 <span class="ct">（3項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -807,7 +808,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Low to High Fuel Request Transition Delay=NaN: 低→高へ移行する際の遅延。読値はNaN(=未設定/無効を示す特殊ビット列の可能性)。遅延カウントで無単位。</li>
 <li>【単位修正(i18n.py)】カテゴリ名の &#x27;spark&#x27;→° が誤爆し、名前に(%)やTransition Delayと明記のある#2/#3まで『°』になっていた。名前先取りブロックを追加: fuel request かつ threshold/hysteresis/delay のとき (Lambda)→λ、(%)またはhysteresis→%、delay→無単位。進角マップ(High/Low Fuel Request・Spark Base Limitの12本)はthreshold/hysteresis/delayを含まず不一致=従来どおり°を維持(ROM全体で誤爆ゼロを確認)。</li>
 <li>結果: #1=λ(=def宣言、値は要注意)、#2 °→%(修正)、#3 °→無単位(修正)。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火時期ベース - 低燃料要求時 <span class="ct">（4項目）</span></h3>
@@ -818,7 +819,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>高要求 vs 低要求の差(Low-Det全域で比較): 軽負荷(0.12〜0.25行)は両者ほぼ同一。中〜高負荷で差が出て、低要求は高要求より遅角。例 全負荷1.0/2000rpm: 高要求17.0° vs 低要求4.5°、1500rpm: 7.3° vs 1.5°。</li>
 <li>物理的意味: 同じ負荷指標でも、低燃料要求=リーン寄りは燃焼が高温・ノックしやすいので進角を控える。高燃料要求=増量(リッチ)は充填が冷えてノック耐性が上がるので進角できる。巡航/軽中負荷は低要求マップ、加速/高負荷は(移行しきい値を越えて)高要求マップへ。</li>
 <li>【単位】全4本とも ° で正。誤ラベルなし→コード変更不要。(定義名 &#x27;Low-Det &#x27;末尾スペースはROM定義由来で表示上無害)</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。7000rpm超は7000列を保持(別ノート rpm-above-7000-clamp 参照)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。7000rpm超は7000列を保持(別ノート rpm-above-7000-clamp 参照)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火時期ベース/アイドル移行 <span class="ct">（3項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -830,7 +831,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Transition to Idle Above Fuel Start-Up Enrichment Threshold(1x1, %)=6.6: 始動時増量(Start-Up Enrichment、%で表現)の残量が6.6%超ならアイドル側へ移行する追加条件。始動直後(増量が残る間)はアイドルマップを使い、増量が減ってから走行ベースへ渡す。</li>
 <li>【単位修正(i18n.py)】カテゴリ名の &#x27;spark&#x27;→° が誤爆し3本とも°になっていた。実体は切替条件。名前ブロックを追加: &#x27;transition to spark base&#x27;/&#x27;transition to idle&#x27; のとき RPM Threshold→rpm、Enrichment Threshold→%(始動時増量が%であることを別テーブルで確認: ベース値12.5〜200%)。対象3本のみ該当=誤爆なし。</li>
 <li>結果: #1 °→rpm、#2 °→rpm、#3 °→%(全て修正)。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火時期ベース補正 - 水温/吸気温(複合) <span class="ct">（6項目）</span></h3>
@@ -845,7 +846,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・ECT/IAT Combined Comp - Retard Rate to Zero(1x1, °)=0.2。補正を0へ戻す(遅角)際の変化量。急変させず滑らかに適用。</li>
 <li>全体像: 補正角 = Base/IMRC/Power(温度マップ) × RPM×Loadスケール を、Advance/Retard Rateで滑らかに適用。</li>
 <li>【単位】× 1本、° 5本で妥当。誤ラベルなし→コード変更不要(Advance/Retard Rate の0.2は°/周期のスルーレートだが周期不明のため°表示のまま)。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火時期ベースの上限 <span class="ct">（4項目）</span></h3>
@@ -858,7 +859,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Spark Base Limit - VCT Add | VCT GT 5(15x13, 〜6500rpm, °)=加算マップ。吸気VCT進角が5°超のとき上限へ最大+4°上乗せ(カム進角でノック特性が変わり、もう少し点火を許容できる領域に対応)。0が大半で1500〜2500rpm中負荷と高回転高負荷に小さな+。</li>
 <li>値の傾向: 上限は -3.5〜54.9°。軽負荷の高進角セルでは上限(例54.9°)が生ベースマップのピーク(59.9°)より数度低く、積み上げ後も実効最大≈55°に抑える意図。中〜高負荷では上限がベースより十分高く、通常はベース値が優先される。</li>
 <li>【単位】全4本とも ° で正。誤ラベルなし→コード変更不要(VCT Add も進角加算°)。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。上限を上げると補正積み上げ時の最大進角が増え、ノック耐性に直結するため実機適用は特に慎重に。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。上限を上げると補正積み上げ時の最大進角が増え、ノック耐性に直結するため実機適用は特に慎重に。</li>
 </ul></div>
 <div class="cat">
 <h3>点火時期ベース上限 補正(高負荷) <span class="ct">（3項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -870,7 +871,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Power Comp - Retard Rate to Zero | Fuel Power Enleanment Clear(1x1, °)=リーン化解除時に補正を0へ戻す遅角レート。0。</li>
 <li>【単位修正(i18n.py)】名前の &#x27;Fuel Power Enleanment Set/Clear&#x27; は &#x27;|&#x27; 以降の条件フラグなのに、既存の power enleanment→% ブロックが先に当たり3本とも % に誤判定していた。実体は点火進角(°)。power enleanment ブロック先頭に『advance/retard を含むなら °』ガードを追加。本物の燃料リーン化テーブル(advance/retard を含まない)への誤爆ゼロを確認。</li>
 <li>結果: 3本とも % → °(修正)。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火時期の上下限(保護) <span class="ct">（11項目）</span></h3>
@@ -889,7 +890,18 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Retard Limit | Flag 7ACC Clear (RPM below 3000 or not Idle)=-27.75°。走行/過渡で最も深い遅角を許容。</li>
 <li>読み方: 上限一律+50°、故障時9.86°固定。遅角下限は条件可変(アイドル系≈-13.5°、故障71B0は-14.04°、7ACC Clearで-27.75°まで許容)。</li>
 <li>【単位】全11本 ° で正(点火時期の上限/下限)。誤ラベルなし→コード変更不要。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
+</ul></div>
+<div class="cat">
+<h3>点火時期の上下限(保護)  （解説: 最終出力の経路） <span class="badge fix">v1.30 追加</span></h3>
+<div class="meta">定義カテゴリ: Spark Limits &nbsp;|&nbsp; note: spark-output-path &nbsp;|&nbsp; 2026-10-16</div>
+<ul>
+<li>最終進角はタスク 0x4D8DA で clamp(0x7AE0+0x7B98+0x7DA4, 最大リタード=RAM 0xFFFF7AFC, 最大進角=@0xCE20C 50°) として計算され、RAM 0xFFFF7AA4 に書かれる(クランプは helper 0x2404、呼び出しは 0x4D9D0)。</li>
+<li>タスク 0x4D84E が 0x7AA4 を進角側だけレート制限して 0xFFFF7AA0 を作る(OBD PID 0x0E=点火時期の表示元)。さらに気筒別補正 @0xCE1F4/F8/FC/0xCE200 を足して気筒別点火値 0xFFFF7AC8/7ACC/7AD0/7AD4 を作る。</li>
+<li>0x19B44 が気筒番号でこの気筒別点火値を選び、(進角−9.8)×65536 を点火イベント角度として設定する。ここが実際の点火。</li>
+<li>タスク 0x4DD58 が作る 0xFFFF7AAC/7AB0 はトルクモデル(点火効率=1−k·(基準−点火)² の計算)専用で、点火そのものには使われない。</li>
+<li>RTOSタスク表の順: 0x180F8=0x4D8DA → 0x180FC=0x4DD58 → 0x18100=0x4D84E。</li>
+<li>実用: 点火を変えるコードパッチは、0x7AA4 を作るクランプの前に入れる(フラットシフト点火リタード・パッチがこの方式)。</li>
 </ul></div>
 <div class="cat">
 <h3>気筒別の点火割り当て <span class="ct">（5項目）</span></h3>
@@ -903,7 +915,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Cylinder 4 Trim(1x1, °)=0.0。</li>
 <li>読み方: 気筒別トリムは本個体では全気筒0°=均等(個別補正なし)。特定気筒のみ遅角する等に使用。Attack Rate Limiterはレート制限で全回転域5°/更新。</li>
 <li>【単位】全5本 ° で正(Attack Rate=°/更新, 各Trim=°)。誤ラベルなし→コード変更不要。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <h2 id="g-e">E. 点火 — アイドル / 上限補正 <span class="ct">（8）</span></h2>
 <div class="cat">
@@ -915,7 +927,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Transition Rate to Spark Idle | Fast=0.02(°/周期): 走行ベース→アイドル上限へ戻る速さ(速)。</li>
 <li>・Transition Rate to Spark Idle | Slow(1x10, 回転数, °/周期): 戻る速さ(遅)。≤1500rpm=0.01(緩やか)、≥2000rpm=1.0(素早い)。アイドル付近は滑らかに、オフアイドルは即収束。</li>
 <li>【単位】全3本 ° で正(ramp対象=進角上限°、レート=°/周期。Decrement/Increment Rate と同扱い)。誤ラベルなし→コード変更不要。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。これで Spark Idle 系カテゴリの確認を一通り完了。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。これで Spark Idle 系カテゴリの確認を一通り完了。</li>
 </ul></div>
 <div class="cat">
 <h3>点火 アイドル/ベース上限 補正 - 特殊暖機(作業中) <span class="ct">（14項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -934,7 +946,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Increment Rate To Target(2本)=目標へ上げる速さ。非アイドル0.3/アイドル0.4。</li>
 <li>【単位修正(i18n.py)】#Warm-Up Fuel Target が warm+fuel target→無単位ルールに誤爆し『無単位』だったが、実体は進角補正目標(値18°はアイドル補正範囲内)。ルール追加: &#x27;spark idle correction&#x27; かつ &#x27;target&#x27; かつ multiplier無し→°。他の target/rate 10本(既に°)とも整合し、WIPカテゴリ内のみに作用(非sparkのWarm-Up Fuel Target=&#x27;&#x27;/×は不変)を確認。</li>
 <li>結果: Warm-Up Fuel Target 1本 無単位→°。他は不変(×3/°10)。</li>
-<li>【注意】WIP(未完)テーブルにつき実挙動は要検証。レート100は即時適用のセンチネルと推定。ベンチECUで値確認のみ、書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】WIP(未完)テーブルにつき実挙動は要検証。レート100は即時適用のセンチネルと推定。ベンチECUで値を確認、実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火 アイドル時の上限 <span class="ct">（2項目）</span></h3>
@@ -945,7 +957,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Spark Idle Limit | IMRC(9x11, °)=IMRC作動時版。本個体では上と同一データ。</li>
 <li>意味: 低回転・高負荷のこもりやすい領域はトルクを抜く向き(遅角許容)、負荷が軽く回転が高い領域は進角を許す。アイドル制御が点火でトルクを即応調整する際の振れ幅を制限する。</li>
 <li>【単位】° で正。誤ラベルなし→コード変更不要。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火 アイドル上限補正 - A/C断続切替 <span class="ct">（3項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -957,7 +969,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Spark Idle AC Cycle Off Comp - Value | AC Cycle Off, Delay Active, Not In-Gear=4°。N時はA/C OFF後に+4°の進角補正。</li>
 <li>【単位修正(i18n.py)】&#x27;Duration&#x27; がカテゴリ &#x27;spark&#x27;→° で誤って°。実体は適用保持時間/カウント。ルール追加: &#x27;spark idle&#x27; かつ &#x27;duration&#x27; を含む→無単位。同ルールで PS Cycle Transition の Duration 2本(6, 14)も是正。&#x27;… - Value&#x27;(進角補正°, 全8本)は対象外=°維持を確認。</li>
 <li>結果: Duration 1本 °→無単位(AC)。副次でPS側Duration 2本も是正。Value系8本は°不変。</li>
-<li>【注意】Duration値(4/6/14)の時間単位(秒かループ数か)は未確定。ベンチECUで値確認のみ、書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】Duration値(4/6/14)の時間単位(秒かループ数か)は未確定。ベンチECUで値を確認、実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火 アイドル上限補正 - アイドル回転偏差 <span class="ct">（8項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -974,7 +986,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・同 | …, Not In-Gear(1x1, °)=1.0(°/周期)。N時は速く戻す。</li>
 <li>【単位】全8本とも ° で正(偏差補正も減衰率も角度)。誤ラベルなし→unit_of変更なし。</li>
 <li>【軸ラベル改善(i18n.py)】IDLE_* 軸が既定で全て『アイドル』表示だったため AXIS_SPECIAL を追加: IDLE_ERROR→アイドル回転偏差(rpm)、IDLE_LOAD→アイドル負荷、IDLE_SPEED→アイドル回転数(rpm)、IDLE_SPEED_TRIM→アイドル回転トリム位置。startswith順に注意(TRIMをSPEEDより前)。非IDLE軸への誤爆なしを確認。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>点火 アイドル上限補正 - パワステ断続切替 <span class="ct">（9項目）</span></h3>
@@ -988,7 +1000,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・PS Cycle On Comp - Value | On, Not In-Gear=15°(据え切り=最悪条件で大きく進角し落ち込みを補う)。</li>
 <li>・PS Cycle Off Comp - Value | Off, In-Gear, AC On=8° / In-Gear, AC Off=8° / Not In-Gear, AC On=8° / Not In-Gear, AC Off=5°。吹け上がり抑制、基本+8°でN+ACオフのみ+5°。</li>
 <li>【単位】全9本とも適正でコード変更なし。Value=°(進角補正)、Decrement Rate=°(°/周期、アイドル偏差カテゴリと同扱い)、Duration 2本は前回A/C対応(spark idle+duration→無単位)で是正済み。</li>
-<li>【注意】Duration(6/14)の時間単位は未確定。ベンチECUで値確認のみ、書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】Duration(6/14)の時間単位は未確定。ベンチECUで値を確認、実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>アイドル負荷(点火) - オルタネータ補正 <span class="ct">（2項目）</span></h3>
@@ -999,7 +1011,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Alt Comp Decrement Rate | Not In-Gear, Pos Alt to Ctrl Mod Delta=0.00075(無単位)。N時はやや速く抜く。</li>
 <li>対になる加算側は DI &#x27;Alt Comp Base | … Neg Alt to Ctrl Mod Delta&#x27;(発電が指令より少ないとき加算)。</li>
 <li>【単位】既に無単位(減衰率)で正。前回のオルタネータ補正修正(spark→°誤爆解消)で対応済みのため今回コード変更なし。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>アイドル負荷(点火) - パワステ補正 <span class="ct">（6項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -1012,7 +1024,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>全体像: 基礎補正(Numerator/Divisor) → 条件別Secondary Multiplierで倍率調整 → PSP Comp Base Multiplier(水温ゲート, 冷間0〜暖機1.0)で最終スケール。</li>
 <li>【単位修正(i18n.py)】Numerator/Divisor と Divisor Sub がカテゴリ &#x27;spark&#x27;→° で誤って°。実体は無次元定数。ルール追加: カテゴリに &#x27;spark idle load - psp&#x27; を含み、かつ名前に &#x27;multiplier&#x27; を含まないものは無単位。Secondary Multiplier/DIのBase Multiplier(×)は除外して温存。AC/Base/VSS/Alt 系への波及なしを確認。</li>
 <li>結果: 2本 °→無単位(修正)、Multiplier 5本は × 維持。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <h2 id="g-f">F. 可変バルブタイミング（VVT） <span class="ct">（2）</span></h2>
 <div class="cat">
@@ -1026,7 +1038,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>【単位修正(i18n.py)】VCT Activation - ECT Threshold/Hysteresis が、カテゴリ名 &#x27;cam timing&#x27; が汎用ループ(hay=カテゴリ+名称)で &#x27;ect&#x27;→°C より先に当たり誤って角度°になっていた。ルール追加: (&#x27;ect threshold&#x27; or &#x27;ect hysteresis&#x27;) かつ カテゴリに &#x27;cam timing&#x27;→°C。値がカム角の VCT Target(ectを含まない)は cam→° を温存。</li>
 <li>回帰確認: VCT Target=°、DO NOT MODIFY側の各Multiplier=×・CKP/CMP Offset=° は不変。</li>
 <li>【備考】DO NOT MODIFYカテゴリに VCT Error - RPM Threshold[/Hysteresis]=7000/93.75 の°誤ラベル、Correction to Apply=°(値-600〜400でカム角か要検証)が残存。当該カテゴリ質問時に精査。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>可変バルブタイミング(VVT)〔変更禁止〕 <span class="ct">（12項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -1046,7 +1058,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>  (1) &#x27;vct error&#x27; かつ &#x27;rpm threshold&#x27; かつ not multiplier/correction → rpm(RPM Threshold/Hysteresis の2本)。</li>
 <li>  (2) &#x27;vct error&#x27; かつ &#x27;correction to apply&#x27; → 無単位(値-600〜400は位相器可動域を超えカム角ではない。OCV制御器出力)。</li>
 <li>Multiplier群は後段 &#x27;multiplier&#x27;→×、CKP/CMP Offset=°、OCV=% は温存。VCT Baseも不変、他カテゴリ波及なし。</li>
-<li>【注意】変更禁止カテゴリ。ベンチECUで値確認のみ・書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】変更禁止カテゴリ。ベンチECUで値を確認・実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <h2 id="g-g">G. 吸気系（IMRC / IMTV） <span class="ct">（2）</span></h2>
 <div class="cat">
@@ -1068,7 +1080,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Increment Rate Divisor(1x11, MAF g/s軸)=全域1000: 新ポート方向へ進む速さの分母。戻し(200)より進み(1000)が遅い=急な全開でも緩やかに移行。</li>
 <li>・Interpolation Bias(1x5)=移行進捗0/30/70/85/100%に対し重み0/0.25/0.6/0.8/1.0。進捗を実際のポート開度補間へ非線形マッピング(Sカーブ)。</li>
 <li>【単位修正】X軸の内部名 &#x27;2500/IMRC_DIVISOR_82DC&#x27; を『IMRC移行進捗(%)』へ別名化(AXIS_SPECIAL追加、Interpolation Bias専用、他軸誤爆なし)。各テーブルのunit_ofは既存ルールで正(°C/rpm/%、Load・Divisor・Biasは無次元表示)で変更不要。</li>
-<li>【扱い上の注意】AT限定ロジックのためMT車では無効/不使用の可能性が高い。ベンチECUで値確認のみ。書込みは未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【扱い上の注意】AT限定ロジックのためMT車では無効/不使用の可能性が高い。ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>可変吸気バルブ(IMTV) <span class="ct">（6項目）</span></h3>
@@ -1083,7 +1095,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Max RPM Threshold | Not Idle=3150rpm / Hysteresis=187.5rpm: 二次開は『回転3150rpm以下 かつ 非アイドル』の範囲に限定。これ以上は一次(4750rpm)側に引き継ぎ。</li>
 <li>まとめ: アイドルは閉、中回転で踏めば二次で開(〜3150rpm)、高回転4750rpm↑は一次で常時開。中間の空白帯(3150〜4750)はヒステリシスで滑らかに接続。</li>
 <li>【単位】全6本とも既存ルールで正(%・rpm)。誤ラベルなし→コード変更不要。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <h2 id="g-h">H. 電子スロットル（DBW） <span class="ct">（4）</span></h2>
 <div class="cat">
@@ -1117,7 +1129,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・APP to Throttle Duty Desired - WIP, Brake On, VSS LT 2kph, AT(1x18, X=アクセル開度%, %)=0〜100。ブレーキON・車速&lt;2kph・ATの条件下でのアクセル開度→目標スロットルデューティ。</li>
 <li>値はほぼ1:1だが低開度(0〜2.3%)で0のデッドバンド。ブレーキ踏下+微速時(AT)のスロットル制御(ブレーキオーバーライド/クリープ制御まわり)のWIPマップ。</li>
 <li>【単位】% で正(スロットルデューティ)。誤ラベルなし→コード変更不要。</li>
-<li>【注意】WIP(作業中)。ベンチECUで値確認のみ・書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】WIP(作業中)。ベンチECUで値を確認・実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>電子スロットル - 目標スロットル開度 補正(総合) <span class="ct">（5項目）</span></h3>
@@ -1257,7 +1269,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>【単位修正(i18n.py)】カテゴリ名の &#x27;spark&#x27;→° が誤爆し4本とも°。実体は負荷加算。テーブル名が &#x27;AC Comp Base | …&#x27; で &#x27;spark idle load&#x27; を含まないため、既存の Spark Idle Load ブロックをカテゴリ判定(&#x27;spark idle load - ac comp&#x27; in category)まで拡張して無単位化。VSS(km/h)/PSP・Alt(×)等の混在する姉妹カテゴリには波及しないことを確認。</li>
 <li>結果: 4本とも °→無単位(修正)。</li>
 <li>【備考】姉妹カテゴリ(Alternator補正・VSS補正・PSP補正)にも同種の°誤ラベルが残存。単位が混在(×/km/h/内部値)するため、該当カテゴリ質問時に個別精査予定。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>安全監視 - アイドル負荷(点火) オルタネータ補正 <span class="ct">（6項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -1272,7 +1284,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Alt Comp - Alt to Ctrl Mod Delta Hysteresis(1x11, 無単位)=実発電と制御モジュール指令の差(Delta)判定のヒステリシス。全域7.8125の定数(X軸 FFFF_8154 は未使用)。単位は発電量差(電流系)と推定だが未確定のため無単位表示。</li>
 <li>【単位修正(i18n.py)】カテゴリ &#x27;spark&#x27;→°、名前中 &#x27;duty&#x27;→% が誤爆し全6本が °/% だった。実体は airflow加算と負荷/ヒステリシス。ルール追加: カテゴリに &#x27;spark idle load - alt&#x27; を含み multiplier を含まないもののうち、&#x27;estimated maf&#x27; を含む→g/s、他→無単位。非DIの &#x27;Alt Comp Decrement Rate&#x27;(減衰率)2本も無単位化。PSP/AC/Base/VSS 系への波及なしを確認。</li>
 <li>結果: Estimated MAF Add 2本 °→g/s、Base/Hysteresis/Decrement 計6本 °or%→無単位。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>安全監視 - アイドル負荷(点火) ベース <span class="ct">（2項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -1283,7 +1295,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Spark Idle Load - Base Add | ECT Start LT -200 else 0(1x7, 無単位)=始動時水温 &lt; -200°C のときの加算。-200°Cは非現実値のため実質常に0(加算無効)。X軸 FFFF_8104 は未使用プレースホルダ。</li>
 <li>【単位修正(i18n.py)】名前/カテゴリの &#x27;spark&#x27;→° が誤爆し2本とも°になっていた。値域0.135〜0.5は負荷であって進角ではない。名前ブロック追加: &#x27;spark idle load&#x27; を含むなら無単位(負荷)。対象2本のみ該当=誤爆なし。</li>
 <li>結果: 2本とも °→無単位(修正)。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>安全監視 - アイドル負荷(点火) パワステ補正 <span class="ct">（1項目）</span></h3>
@@ -1293,7 +1305,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>値: ECT&lt;20°C=0(冷間は無効)、40°C=0.1、60°C=0.4、80〜100°C=1.0(フル)。暖機とともに補正を立ち上げる。</li>
 <li>実際の補正量は別カテゴリ &#x27;Spark Idle Load - PSP Compensation&#x27;(分子/除数・Secondary Multiplier)が決め、本表が温度ゲートとして掛かる。</li>
 <li>【単位】× で正。誤ラベルなし→コード変更不要。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>安全監視 - アイドル負荷(点火) 車速補正 <span class="ct">（5項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -1308,7 +1320,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>【単位修正(i18n.py)】カテゴリ &#x27;spark&#x27;→°、名前 &#x27;vss&#x27;→km/h が誤爆。#1/#2 は負荷(°→無単位)、#3/#4 は値が速度でない内部カーブ(km/h→無単位)。ルール追加: カテゴリに &#x27;spark idle load - vss&#x27; を含み multiplier を含まないもの→無単位。さらに既存 &#x27;vss threshold&#x27;→km/h 判定に『spark idle load カテゴリは除外』ガードを追加(#3/#4 が &#x27;VSS Threshold&#x27; を名前に持つため先取りされていた)。Multiplier(×)は温存。</li>
 <li>回帰確認: Fan Control / Power Enleanment 等の本物の VSS Threshold は km/h 維持。Spark Idle Load 系の他カテゴリ(Base/AC/PSP/Alt)も不変。</li>
 <li>結果: #1〜#4 を無単位化、#5 は × 維持。</li>
-<li>【注意】#3/#4 の値(0〜31.22)の物理単位は未確定。ベンチECUで値確認のみ、書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】#3/#4 の値(0〜31.22)の物理単位は未確定。ベンチECUで値を確認、実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>安全監視しきい値 - スロットル目標 <span class="ct">（2項目）</span></h3>
@@ -1320,7 +1332,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>P0601はOBD-II標準『内部制御モジュール・メモリ/チェックサム異常』。本マップはその判定閾値。</li>
 <li>【単位】両方 % で正(スロットルデューティ差)。誤ラベルなし→コード変更不要。</li>
 <li>【参考】通常マップ(5.6〜22)の値は末尾スペース付きトルク要求カテゴリの BYPASSED - WIP と同一パターン(定義上のコピー流用とみられる)。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>安全監視しきい値 - トルク要求 <span class="ct">（3項目）</span></h3>
@@ -1332,7 +1344,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Checksum Fault - Negative Torque Request Threshold(29x12, X=回転/Y=APP, N·m)=2.48〜199.2。負トルク(エンブレ/減速)側の要求しきい値マップ。</li>
 <li>【単位】全3本 N·m で正(トルクしきい値、値も2.0L実トルク域と整合)。誤ラベルなし→コード変更不要。</li>
 <li>【データ注意】同名で末尾スペース付きの別カテゴリ &#x27;Data Integrity Thresholds - DBW Torque Request &#x27;(trailing space)が存在し、BYPASSED - WIP(29x12, 5.6〜22N·m, バイパス/作業中)1本を含む。元定義ファイルのカテゴリ名ゆれ。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>安全監視しきい値 - トルク要求 <span class="ct">（1項目）</span></h3>
@@ -1342,7 +1354,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・BYPASSED - WIP(29x12, X=回転/Y=アクセル開度, 現単位N·m, float 5.6〜22)=値の種類 5.6/5.79/6.23/10.19/16.37/22.0(APP開度で段階、回転方向一定)。</li>
 <li>性質: BYPASSED=ECUロジックで未使用(迂回済み)、WIP=作業中。値の離散セットは『スロットル目標 - Throttle Duty Delta Threshold(%)』と完全一致=%テーブルをコピーしたプレースホルダとみられる。</li>
 <li>【単位の扱い】カテゴリ &#x27;torque&#x27;→N·m と推定されるが、実機未使用かつ%テーブルのコピーで、本来トルク閾値の雛形(N·m)なのか%値がそのまま入っているだけなのか確定不能。明確な誤りとは言えないため現状N·mのまま保留(推測で書き換えない方針)。コード変更なし。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <h2 id="g-k">K. 診断（DTC） <span class="ct">（2）</span></h2>
 <div class="cat">
@@ -1354,7 +1366,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>【単位修正(i18n.py)】126本中37本が、名称に含むセンサ種別で物理単位に誤爆していた(°7/kPa5/°C6/V6/%6/g/s3/rpm3/km/h1)。例: ECT系DTC→°C、MAP系→kPa、MAF系→g/s、O2電圧系→V、スロットル系→%、点火/カム系→°。</li>
 <li>対策: カテゴリ &#x27;dtc flags&#x27; を含む場合は一括で無単位を返すルールを追加(全126本が0/1フラグのため安全)。&#x27;flag&#x27; を含むカテゴリは DTC Flags B のみ。</li>
 <li>結果: 126本すべて無単位に是正。DTC Thresholds等 他カテゴリは不変。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。値1/0=DTC検出の有効/無効で、むやみに0化すると診断が無効になる点に注意。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。値1/0=DTC検出の有効/無効で、むやみに0化すると診断が無効になる点に注意。</li>
 </ul></div>
 <div class="cat">
 <h3>診断コード(DTC) 判定しきい値 <span class="ct">（27項目）</span></h3>
@@ -1378,7 +1390,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・P0601 TP Comp Fault 20C8 Activation Count: % → 無単位(回数)。</li>
 <li>追加ルール: カテゴリ &#x27;dtc thresholds&#x27; かつ (&#x27;activation count&#x27;|&#x27;counter limit&#x27;|&#x27;timer&#x27;)→無単位、&#x27;impedence/impedance&#x27;→Ω、&#x27;sync offset&#x27;→°、&#x27;tp threshold&#x27;→%。他(Fuel Trim=%, Load=無単位, ECT=°C, Req Torque閾値=N·m, TP factor=g/s)は後段へ流す。</li>
 <li>回帰確認: DTC以外の &#x27;timer&#x27;/&#x27;tp threshold&#x27;/&#x27;activation count&#x27; 系(Engine Fan=s, Rev Limit条件=rpm, Power Enleanment/IMRC TP Threshold=%, 各×/°条件)は全て不変。スコープ限定で波及なし。</li>
-<li>【注意】ベンチECUで値確認のみ。書込み未実施(SBL未入手でフラッシュ不可)。</li>
+<li>【注意】ベンチECUで値を確認。実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <h2 id="g-l">L. リミッタ（回転 / 車速 / 負荷） <span class="ct">（5）</span></h2>
 <div class="cat">
@@ -1386,11 +1398,22 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <div class="meta">定義カテゴリ: Engine Limiters - RPM &nbsp;|&nbsp; note: limiter-rpm-rev &nbsp;|&nbsp; 2026-10-06</div>
 <ul>
 <li>回転数上限保護。2系統=燃料カット(噴射停止)とスロットルカット(スロットルを閉じる)。</li>
-<li>スロットルカット(2): ・| クラッチ踏込 @0xC53BC=6500rpm(ニュートラル空吹かしのオーバーレブ保護)。 ・| クラッチ戻し @0xC53C0=10000rpm(走行中=実質無効、燃料カットが先)。</li>
+<li>スロットルカット(2): ・| クラッチ踏込 @0xC53BC=6500rpm(車速2km/h未満=停車中のみ。ニュートラル空吹かしのオーバーレブ保護)。 ・| クラッチ戻し @0xC53C0=10000rpm(走行中=実質無効、燃料カットが先)。</li>
 <li>燃料カット(9): ・一次 低水温しきい値 @0xC47A4=-15°C / ヒステリシス @0xC47A8=5°C。 ・| 水温が一次しきい値以下 or ECT入力故障 @0xC4870=5500rpm。 ・二次 低水温しきい値 @0xC47AC=-15°C / ヒステリシス @0xC47B0=5°C。 ・| 二次しきい値以下・始動時 @0xC4874=5500rpm。 ・| AT 73C0タイマ作動中 @0xC4878=6500rpm。 ・| ATタイマ満了・MT @0xC487C=7500rpm(実質のレブリミット)。 ・ヒステリシスA(ゼロ)| 73C5遅延作動 @0xC4880=0rpm。</li>
 <li>まとめ: 通常(MT温間)は⑩7500rpmで燃料カット。冷間/低水温・ECT故障は⑤⑧5500rpmへ低下(③④⑥⑦が判定しきい値/ヒス)。クラッチ踏み空吹かしは①6500rpmでスロットルカット(走行中②10000=実質無効)。</li>
 <li>連動/注意: 上げるなら⑩(実レブ)中心に、バルブ・駆動系の許容回転を必ず確認。機械的限界超えはエンジン破損に直結。マニュアル第3章『回転リミッタ』の値と一致。</li>
 <li>表示(修正済み 2026-10-06): ①②スロットルカットは throttle→% 誤表示だったのを rpm に、③④⑥⑦の低水温しきい値/ヒスは rev limit→rpm 誤表示だったのを °C に是正(unit_of に rev limit 専用判定を追加)。燃料カット回転(5500/6500/7500/0)は rpm 維持。</li>
+</ul></div>
+<div class="cat">
+<h3>リミッタ - 回転数(レブリミット)  （解説: クラッチ連動スロットルカットの車速条件 / +2追加項目） <span class="badge fix">v1.30 追加</span></h3>
+<div class="meta">定義カテゴリ: Engine Limiters - RPM &nbsp;|&nbsp; note: cpp-throttle-cut-speed-gate &nbsp;|&nbsp; 2026-10-16</div>
+<ul>
+<li>ルーチン 0x097346: リミット = (車速 &lt; @0xC53B8(2.0km/h) かつ クラッチ踏込) ? @0xC53BC(6500rpm) : @0xC53C0(10000rpm)。フラグ 0xFFFF3827 = RPM &gt; リミット(成立中は −@0xC53C4=100rpm のヒステリシス)。</li>
+<li>エミュレータで確認: クラッチ踏込・7100rpm で、車速 0 / 1.9km/h は成立、2.1 / 60km/h は不成立。クラッチを離していれば常に不成立。</li>
+<li>よって『CPP set(@0xC53BC)を上げればフラットシフトになる』(v1.10の説明)は誤り。走行中のシフトでは何も起きない。実体は停車中の空ぶかしリミッタで、ローンチ用の回転リミッタとして使える。</li>
+<li>@0xC53B8(車速しきい値)と @0xC53C4(ヒステリシス)は LibreTuner 定義に無いため、エディタの追加項目としてこのカテゴリに表示する(v1.30〜、範囲外入力は拒否)。</li>
+<li>車速しきい値を大きくすれば(例 300km/h)走行中もクラッチ踏込でスロットルカットが効く理屈だが、未検証。</li>
+<li>関連RAM: クラッチ 0xFFFF6FCC(byte、非0=踏込。helper 0x1B978 はこのバイトを読むだけ)、車速 0xFFFF6D04(float km/h、PID 0x0D の元)、RPM 0xFFFF37DC(ETC側のコピー。本体は 0xFFFF6D5C=PID 0x0C の元)。</li>
 </ul></div>
 <div class="cat">
 <h3>リミッタ - 回転数(レブリミット) <span class="ct">（11項目）</span></h3>
@@ -1438,7 +1461,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>まとめ: エンジンLoad = 空気量 × ①負荷スケーリング(＋②VCT補正:カム進角&gt;5°)。これが点火/燃料/VVT全マップの縦軸。最も基礎かつ影響が広く、変更は実測(ワイドバンド/VE解析)必須。</li>
 <li>表示(修正済み 2026-10-06): ②は『VCT』で ° 誤表示だったが値はLoadスケーリングの加算(VCT&gt;5は条件)。unit_of に『load scaling は無単位』を追加し是正。MAF Scaling=g/s、VCT Target=° は維持。</li>
 </ul></div>
-<h2 id="g-m">M. パッチ（コード書換） <span class="ct">（6）</span></h2>
+<h2 id="g-m">M. パッチ（コード書換） <span class="ct">（7）</span></h2>
 <div class="cat">
 <h3>パッチ - 減速燃料カット(DFCO Disable)とは <span class="ct">（概説）</span></h3>
 <div class="meta">定義カテゴリ: Patch - Decel &nbsp;|&nbsp; note: patch-dfco &nbsp;|&nbsp; 2026-10-04</div>
@@ -1456,7 +1479,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>状態: unpatched=36610(0x8F02=条件分岐命令のまま=DFCO有効/通常動作)。patched=9(0x0009=NOP)で分岐を潰しDFCO無効化=常時燃料噴射。</li>
 <li>現在値36610=未パッチ→この個体はDFCO通常作動。9を書くとNOP化してDFCO無効。</li>
 <li>【単位】- で正(生の命令ワード/オペコード、物理量ではない)。誤ラベルなし→コード変更不要。</li>
-<li>【注意】コード領域の書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(ベンチ・SBL未入手で書込み不可)。DFCO無効化は燃費悪化/オーバーラン挙動/触媒温度等に影響。カテゴリ名の末尾スペースは元定義のゆれ。</li>
+<li>【注意】コード領域の書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(予備/ベンチECUで検証済み・SBL入手済)。DFCO無効化は燃費悪化/オーバーラン挙動/触媒温度等に影響。カテゴリ名の末尾スペースは元定義のゆれ。</li>
 </ul></div>
 <div class="cat">
 <h3>パッチ - 排気量設定 <span class="ct">（4項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -1469,7 +1492,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・replace NaN value with engine displacement in cc(@0xFBA00, float)=現状NaN(未設定)。ここに実排気量をccで書き込む(patched=1030656 はこの0xFBA00を指す)。単位=cc。</li>
 <li>仕組み: A/B/C の参照先を 0xFBA00 に張り替え、0xFBA00 に新排気量(cc)を格納。元の2.0L(LF 約1999cc)から変更する場合に使用。</li>
 <li>【単位修正(i18n.py)】Patch Address A/B/C が displacement→cc 誤爆で cc になっていた。実体はROMアドレス(ポインタ)。ルール追加: &#x27;engine displacement&#x27; かつ &#x27;patch address&#x27;→無単位。実排気量値(replace NaN…in cc)は cc を温存。他に displacement テーブルは無く波及なし。</li>
-<li>【注意】コード/定数書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(ベンチ・SBL未入手で書込み不可)。4か所セットで適用する(ポインタ3+値1)。</li>
+<li>【注意】コード/定数書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(予備/ベンチECUで検証済み・SBL入手済)。4か所セットで適用する(ポインタ3+値1)。</li>
 </ul></div>
 <div class="cat">
 <h3>パッチ - イモビライザー無効化 <span class="ct">（1項目）</span></h3>
@@ -1481,7 +1504,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>現在値36616=未パッチ→この個体はイモビ照合有効。9を書くと鍵/BCM照合をスキップしイモビなしで始動可能。</li>
 <li>用途: ベンチ単体起動/エンジンスワップ/スタンドアロン運用(元の鍵/BCMが無い環境でECUを動かす)で一般的。盗難防止機構の無効化なので所有車両・自分のベンチECUに限る。</li>
 <li>【単位】- で正(生の命令ワード/オペコード)。誤ラベルなし→コード変更不要。</li>
-<li>【注意】コード書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(ベンチ・SBL未入手で書込み不可)。DFCO無効化パッチ(0x45976, 0x8F02→9)と同系統の手法。</li>
+<li>【注意】コード書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(予備/ベンチECUで検証済み・SBL入手済)。DFCO無効化パッチ(0x45976, 0x8F02→9)と同系統の手法。</li>
 </ul></div>
 <div class="cat">
 <h3>パッチ - 開ループ短期補正の修正 <span class="ct">（1項目）</span></h3>
@@ -1493,7 +1516,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>目的: 高負荷/全開など開ループ域ではO2フィードバックのSTFTは本来ホールド(凍結)されるべきだが、純正の分岐条件によりSTFTが不適切に適用/保持される挙動を、分岐を無条件化して正す既知のフィックス。</li>
 <li>現在値141=未パッチ。</li>
 <li>【単位】- で正(生の命令バイト/オペコード)。誤ラベルなし→コード変更不要。</li>
-<li>【注意】コード書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(ベンチ・SBL未入手で書込み不可)。</li>
+<li>【注意】コード書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(予備/ベンチECUで検証済み・SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>パッチ - メモリ読出し有効化(UDS Mode23) <span class="ct">（3項目）</span></h3>
@@ -1505,7 +1528,18 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Patch @0x84C07(uint8): unpatched=6(0x06)→patched=15(0x0F)。同テーブルの許可フラグ/パラメータ変更。</li>
 <li>現状は全て未パッチ=Mode23無効。3か所すべて適用して初めて0x23読出しが開通する。</li>
 <li>【単位】全3本 - で正(生のコード/テーブルバイト、物理量ではない)。誤ラベルなし→コード変更不要。</li>
-<li>【注意】コード/テーブル書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(ベンチ・SBL未入手で書込み不可)。任意アドレスのメモリ読出しを開放するため自ECUの解析/ロギング用途に限定。DFCO/イモビ無効化と同じ『0x8Fxx分岐→NOP(9)』手法を含む。</li>
+<li>【注意】コード/テーブル書き換えパッチ。適用にはチェックサム再計算+実機フラッシュ必須(予備/ベンチECUで検証済み・SBL入手済)。任意アドレスのメモリ読出しを開放するため自ECUの解析/ロギング用途に限定。DFCO/イモビ無効化と同じ『0x8Fxx分岐→NOP(9)』手法を含む。</li>
+</ul></div>
+<div class="cat">
+<h3>パッチ - フラットシフト（点火リタード）  （4項目・追加項目） <span class="badge fix">v1.30 追加</span></h3>
+<div class="meta">定義カテゴリ: Patch - Flat Shift Ignition Retard &nbsp;|&nbsp; note: patch-flatshift-retard &nbsp;|&nbsp; 2026-10-16</div>
+<ul>
+<li>第3ドラフト(ベンチ検証用)。ncecu/flatshift.py が本体。tools/patch_flatshift_retard.py、またはエディタの『点火リタード』ボタンで適用する。</li>
+<li>注入: リテラル @0x4DA98(0x4D9D0 のクランプ呼び出しが参照)をケーブ 0xDE200 に差し替え。条件成立時は最終進角からリタード量を引いてから純正クランプ 0x2404 へ進む(純正の最大リタードで下限制限)。特殊モードの経路は通らない。</li>
+<li>条件: クラッチ 0xFFFF6FCC≠0 かつ APP 0xFFFF56C8 &gt; @0xDE260(既定80%) かつ RPM 0xFFFF6D5C &gt; @0xDE264(既定7000) かつ 車速 0xFFFF6D04 &gt; @0xDE268(既定10km/h)。リタード量 @0xDE26C(既定20°)。</li>
+<li>エディタ: パッチ適用済みROMでだけ4項目を表示。範囲外の入力は拒否(APP 0〜100 / RPM 3000〜7500 / 車速 0〜250 / リタード 0〜30)。</li>
+<li>検証: 逆アセンブル＋エミュレータ1484ケースで純正の計算(0x7B98−リタード)と一致。実機は未検証。ライブの点火時期 PID 0x0E(=0x7AA0)にリタードが出るはず。</li>
+<li>RAM補足: APP%=0xFFFF56C8(APP1/APP2合成後の最終値0〜100、コピー 0xFFFF6CA4)。定義の軸名『APP_6D1C』は誤りで、0x6D1C〜0x6D30 は車速の履歴、0x6D10 は加速度。</li>
 </ul></div>
 <h2 id="g-n">N. センサ / 車両系 <span class="ct">（7）</span></h2>
 <div class="cat">
@@ -1599,7 +1633,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・Voltage Desired Add | RPM LT 5K, Load LT 0.80: rpm → V(電圧加算 -1.3〜0)。</li>
 <li>・WIP Limit | RPM below 312 or RPM LT Idle Speed: rpm → ×(0〜1の制限係数)。</li>
 <li>追加ルール: カテゴリに &#x27;alternator&#x27; かつ &#x27;wip&#x27; のとき &#x27;voltage desired&#x27;→V、&#x27;wip limit&#x27;→×。Base RPM Threshold(主語がRPM)=rpm は後段で温存。非WIPオルタ系は不変。</li>
-<li>【注意】WIP(未完成)。ベンチECUで値確認のみ・書込み未実施(SBL未入手でフラッシュ不可)。Undefined項目は意味未確定。</li>
+<li>【注意】WIP(未完成)。ベンチECUで値を確認・実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。Undefined項目は意味未確定。</li>
 </ul></div>
 <h2 id="g-p">P. 実車比較・リバースエンジニアリング（トルクモデル） <span class="ct">（3）</span></h2>
 <div class="cat">
@@ -1617,7 +1651,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>・点火ベース-高燃料要求 Low-Det: 98/210セル変化、最大Δ-5°(進角を引く傾向)。</li>
 <li>・点火ベース上限-低燃料要求: 93/210セル変化、最大Δ+6.7°。</li>
 <li>【未定義の相違領域=未定義マップ(RE進展)】Gear Ratio(0xC1370)とFuel Status OL(0xC4775)の間の定義空白域に4マップ: 0xC2000付近、0xC3BC0付近、0xC3FA0付近、0xC4390付近。SH7058はビッグエンディアン。BE float32で読むと実在の2Dマップ=実車側0xC2000には本体に続き埋め込みRPM軸(1000〜7000rpm,13点)+Load軸(0〜1.0)が存在。値域 約42〜217(回転×負荷)でトルク/エアフロ系モデルと推定。ベンチ側は各行がほぼ一定(フラット化)、実車側は充実データ。4マップとも軸(RPM/Load)は共通で本体データのみ相違。正確な物理量(N·m トルク か g/s エアフロ か)と厳密な寸法(軸埋め込みのため矩形境界は要確定)は参照コードの逆アセンブルで確定予定。投機的な意味断定は保留だがBE float定数としての値自体は確定。</li>
-<li>【運用】実車へ書くものは必ず ecu_readout_original.bin 基準。チェックサム: ベンチ@0xFF73C=0x5128235A / 実車=0x871E876C。SBL未入手のため書込みは依然不可。</li>
+<li>【運用】実車へ書くものは必ず ecu_readout_original.bin 基準。チェックサム: ベンチ@0xFF73C=0x5128235A / 実車=0x871E876C。SBL入手済で実機フラッシュは検証済み（予備/ベンチECUに加え、車上OBD2ポート CAN-H/CAN-L/GND 経由でも成功）。実車へ書く場合も必ず上記の実車基準ROMから。</li>
 <li>成果物: docs/ecu_diff_report.html(差分レポート・ヒートマップ付き)。</li>
 </ul></div>
 <div class="cat">
@@ -1636,7 +1670,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>【評価系】汎用補間器0x2068/2D版0x20DC、RAM読取ヘルパ0x1B984。入力にECT(0xFFFF6D5C)等。結果はRAM 0xFFFF70xx(例0xFFFF7074)へ。モード/フラグで記述子(0x935E4/F0/FC/93608/93614/93620)や本バンク(0x9365C)を切替。4変種(spark/k各4)はカム位相(VCT)/燃料要求別と推定。</li>
 <li>【差分】ベンチ↔実車で異なるのは最適トルク3面(03/10/11)のみ=トルク出力だけ現車合わせ。MBT点火・係数・温度補正は一致。</li>
 <li>【定義】カテゴリ WIP - Torque Model Bank (RE)。名称=役割別(RE Torque=N·m / RE MBT Spark=° / RE Model Factor spark-loss coeff=無単位)。差分面に (car!=bench)。</li>
-<li>【注意】寸法・軸・物理量・数式構造は確定。4変種の分割条件(カム位相/燃料要求)の厳密特定のみ残課題。SBL未入手で書込み不可。</li>
+<li>【注意】寸法・軸・物理量・数式構造は確定。4変種の分割条件(カム位相/燃料要求)の厳密特定のみ残課題。実機フラッシュは予備/ベンチECUで実施可(SBL入手済)。</li>
 </ul></div>
 <div class="cat">
 <h3>DBWトルク協調(RE) <span class="ct">（22項目）</span> <span class="badge fix">i18n修正</span></h3>
@@ -1648,7 +1682,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>【係数・補正・小テーブル 15面】@C0B38,@C0CC0,@C0E48,@C45C4,@C4DFC,@C4F98,@C5134,@C5E1C,@C65D4,@C66CC,@C67C4,@C68BC,@C69B4,@C7400,@C8A24。無次元の係数(0〜1付近)や内部補正量。協調演算の重み/補正項と推定(役割は命名レベル)。</li>
 <li>【差分】ベンチ↔実車で22面すべて一致(差分0)。=DBWトルク協調層は現車合わせ対象外。現車合わせされたのは最適トルク3面(map03/10/11)のみ(wip-torque-model-re 参照)。</li>
 <li>【定義】カテゴリ『WIP - DBW Torque Coordinator (RE)』。i18n単位ルール追加(bmep→kPa / throttle→% / 他=無単位)、JA訳『DBWトルク協調(RE)』。寸法・軸は記述子由来で確定、名称は役割別(RE DBW BMEP Torque / RE DBW Throttle Duty / RE DBW Factor / RE DBW Table)。</li>
-<li>【注意】WIP(作業中)。寸法・軸・BMEP/スロットルの物理量は確定、係数15面の厳密な役割は未特定。ベンチECUで値確認のみ・SBL未入手でフラッシュ(書込み)不可。</li>
+<li>【注意】WIP(作業中)。寸法・軸・BMEP/スロットルの物理量は確定、係数15面の厳密な役割は未特定。ベンチECUで値を確認・実機フラッシュは予備/ベンチECUで検証済み(SBL入手済)。</li>
 </ul></div>
 <h2 id="g-z">その他（排ガス / ファン / ギア比） <span class="ct">（5）</span></h2>
 <div class="cat">

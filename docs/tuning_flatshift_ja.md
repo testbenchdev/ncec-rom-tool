@@ -104,7 +104,7 @@ python tools/patch_flatshift_retard.py --base <書き込み先ECUの現在のROM
 
 | 版 | 注入点 | トリガ | 状態 |
 |---|---|---|---|
-| draft1 `ncec_flatshift_retard_draft1.bin` | `0x4D9D8`（`0x7AA4` の書込をケーブへ） | 純正フラグ `0xFFFF3827` | 注入点は正しいが、**トリガが停車中専用**、かつ**最大リタードのクランプ後に引く**ので下限を割り得る → 使わない |
+| draft1（`ncec_flatshift_retard_draft1.bin`、プロジェクト外へ移動済み） | `0x4D9D8`（`0x7AA4` の書込をケーブへ） | 純正フラグ `0xFFFF3827` | 注入点は正しいが、**トリガが停車中専用**、かつ**最大リタードのクランプ後に引く**ので下限を割り得る → 使わない |
 | draft2（削除済み） | `@0x4DF18`（`0x4DD58` のクランプ） | 純正フラグ `0xFFFF3827` | **トルクモデル側を変えるだけで点火は変わらない**（誤った注入点）→ 破棄 |
 | **draft3** `ncec_flatshift_retard_draft3.bin` | `@0x4DA98`（`0x4D8DA` の最終進角クランプ） | 自前4条件 | 現行。ベンチ検証待ち |
 

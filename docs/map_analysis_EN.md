@@ -3,7 +3,7 @@
 **Scope:** Reverse-engineering notes for a spare Mazda NCEC (Roadster / MX-5) ECU — Renesas SH7058, CAL ID **LFG7EG**.
 **Base ROM:** `ncec_rom_dump.bin` · **Definitions:** LibreTuner (LFG7EG) · **Coverage:** all **124 categories / 875 tables** investigated.
 
-> ⚠️ These notes are based on **reading values/units from one bench ECU**. **No flashing was performed** (no SBL obtained, so writing is not possible). Numbers are the as-read calibration of this single unit and may differ on other units/CAL IDs.
+> ⚠️ These notes are based on **reading values/units from one bench ECU**. **Real flashing is validated (SBL obtained)**: on the spare/bench ECU and **via the car's OBD2 port (CAN-H / CAN-L / GND)**, both over the existing DSD TECH SH-C30L — no extra interface. Only your own ECU / vehicle. Numbers are the as-read calibration of this single unit and may differ on other units/CAL IDs.
 >
 > See `unit_fixes_i18n.md` for the list of unit-label fixes applied to `ncecu/i18n.py`. A table marked 🔧 below had a unit fix.
 
@@ -23,7 +23,7 @@
 10. [Data Integrity / Monitoring](#j-data-integrity--monitoring) (15)
 11. [Diagnostics (DTC)](#k-diagnostics-dtc) (2)
 12. [Limiters (RPM / VSS / Load)](#l-limiters-rpm--vss--load) (5)
-13. [Patches (Code)](#m-patches-code) (6)
+13. [Patches (Code)](#m-patches-code) (7)
 14. [Sensors / Vehicle](#n-sensors--vehicle) (7)
 15. [WIP / Misc](#o-wip--misc) (1)
 16. [Other (Emissions / Fan / Gear Ratio)](#other-emissions--fan--gear-ratio) (5)
@@ -115,6 +115,7 @@ Format: **Category** (table count) — role. *Units/notes.*
 - **Spark Base Limit** (4) — Upper clamp (ceiling) on total ignition advance after all corrections. *RPM×Load, °BTDC.*
 - **Spark Base Limit Comp - Power** (3) 🔧 — High-load override/relax of the advance ceiling tied to fuel power-enleanment set/clear. *Fix: 3× %→° (condition clause misfired into % block). All 0 here (inactive).*
 - **Spark Limits** (11) — Final clamps (advance ceiling / retard floor) on the final spark timing for safety/driveability. *°; e.g. Max Advance +50°, fault default 9.86°, retard floors −13.5 to −27.75°.*
+- **Spark Limits (note: final output path)** — Task 0x4D8DA computes the final advance as clamp(0x7AE0+0x7B98+0x7DA4, max retard = RAM 0xFFFF7AFC, max advance = @0xCE20C 50°) and stores it to RAM 0xFFFF7AA4 (clamp helper 0x2404, called at 0x4D9D0). Task 0x4D84E rate-limits 0x7AA4 on the advance side into 0xFFFF7AA0 (source of OBD PID 0x0E timing advance), then adds the per-cylinder trims @0xCE1F4/F8/FC/0xCE200 to make per-cylinder spark 0xFFFF7AC8/7ACC/7AD0/7AD4. 0x19B44 picks the per-cylinder value by cylinder index and sets the ignition event angle as (advance − 9.8) × 65536. This is the actual spark. 0xFFFF7AAC/7AB0 written by task 0x4DD58 feed the torque model only (spark efficiency = 1 − k·(ref − spark)²); they do not drive ignition. RTOS task-table order: 0x180F8 = 0x4D8DA → 0x180FC = 0x4DD58 → 0x18100 = 0x4D84E. Practical: a code patch that changes spark must act before the clamp that produces 0x7AA4 (the flat-shift ignition-retard patch does this).
 - **Spark To Cylinders** (5) — Final stage distributing timing to each cylinder. *Attack-rate limiter 5°/update + per-cylinder trims (all 0 = even).*
 
 ---
@@ -194,6 +195,7 @@ Format: **Category** (table count) — role. *Units/notes.*
 
 - **Engine Limiters - RPM** (11) — RPM-limit protection, two systems: fuel cut (injection stop) and throttle cut (close throttle).
 - **Engine Limiters - RPM** (sub-topic) — Note on the 7000–7500 rpm band: ignition/fuel map RPM axes stop at 7000 while rev (fuel-cut) is 7500; explains what is used above 7000.
+- **Engine Limiters - RPM (note: vehicle-speed gate of the clutch throttle cut; +2 extra items)** — Routine 0x097346: limit = (vehicle speed < @0xC53B8 (2.0 km/h) AND clutch pressed) ? @0xC53BC (6500 rpm) : @0xC53C0 (10000 rpm). Flag 0xFFFF3827 = RPM > limit (hysteresis −@0xC53C4 = 100 rpm while active). Emulator check: clutch pressed at 7100 rpm → set at 0 / 1.9 km/h, not set at 2.1 / 60 km/h. Never set with the clutch released. So 'raise CPP set (@0xC53BC) for flat shift' (the v1.10 claim) is wrong: nothing happens on moving shifts. It is a standstill free-rev limiter, usable as a launch RPM limiter. @0xC53B8 (speed threshold) and @0xC53C4 (hysteresis) are missing from the LibreTuner definition; the editor shows them as extra items in this category (v1.30+, out-of-range input rejected). Raising the speed threshold (e.g. 300 km/h) should make the clutch throttle cut work while moving as well — untested. Related RAM: clutch 0xFFFF6FCC (byte, non-zero = pressed; helper 0x1B978 just reads this byte), vehicle speed 0xFFFF6D04 (float km/h, PID 0x0D source), RPM 0xFFFF37DC (ETC copy; master 0xFFFF6D5C = PID 0x0C source).
 - **Engine Limiters - VSS** (4) — Vehicle-speed limiter conditions (VSS and RPM thresholds + hysteresis). *km/h / rpm correct.*
 - **Engine Load - Limits** (5) — Upper/lower clamps on computed engine Load (~1.0 = full). *Load is the Y axis of spark/fuel/VVT maps, so this guards over/under estimation.*
 - **Engine Load - Scaling** (2) — The most fundamental Load (VE) calibration map. *Load drives spark/fuel/VVT axes — widest influence.*
@@ -208,6 +210,7 @@ Format: **Category** (table count) — role. *Units/notes.*
 - **Patch - Immobilizer Disable** (1) — Code patch that NOPs the immobilizer key-check branch. *unpatched 36616 (0x8F08) → patched 9 (NOP). Unitless. Currently unpatched (immobilizer active). For bench/swap/standalone use on one's own ECU.*
 - **Patch - Open Loop Short Term Fuel Trim Fix** (1) — One-byte code patch fixing open-loop STFT behavior (STFT should be held in OL). *unpatched 141 (0x8D BT/S) → patched 160 (0xA0 BRA). Unitless. Currently unpatched.*
 - **Patch - UDS Read Memory By Address (Mode 23)** (3) — Three code patches enabling UDS service 0x23 (ReadMemoryByAddress) for RAM/ROM dumping. *@0x7F734 36631→9 (NOP); @0x84C04 0→16; @0x84C07 6→15. Unitless. All unpatched.*
+- **Patch - Flat Shift Ignition Retard (4, extra items)** — Draft 3 (for bench validation). Implementation: ncecu/flatshift.py. Apply with tools/patch_flatshift_retard.py or the editor's 'Flat-shift retard' button. Hook: literal @0x4DA98 (used by the clamp call at 0x4D9D0) → cave 0xDE200. When the conditions hold, the retard is subtracted from the final advance before the stock clamp 0x2404 (floored by the stock max retard). Special-mode paths bypass it. Conditions: clutch 0xFFFF6FCC ≠ 0 AND APP 0xFFFF56C8 > @0xDE260 (default 80%) AND RPM 0xFFFF6D5C > @0xDE264 (default 7000) AND speed 0xFFFF6D04 > @0xDE268 (default 10 km/h). Retard amount @0xDE26C (default 20°). Editor: the 4 items appear only for ROMs with the patch applied; out-of-range input is rejected (APP 0–100 / RPM 3000–7500 / speed 0–250 / retard 0–30). Verification: disassembly + 1484 emulator cases match the stock math (0x7B98 − retard). Not tested on hardware yet. Live timing PID 0x0E (= 0x7AA0) should show the retard. RAM notes: APP % = 0xFFFF56C8 (final APP1/APP2 value 0–100; copy 0xFFFF6CA4). The definition's axis label 'APP_6D1C' is wrong: 0x6D1C–0x6D30 is vehicle-speed history and 0x6D10 is acceleration.
 
 ---
 

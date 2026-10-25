@@ -46,30 +46,29 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 @media print{.top,.toc{display:none}body{font-size:11px}.cat,.flowwrap{break-inside:avoid;border-color:#bbb}h2{break-before:auto}svg.flow .n{stroke:#999}}
 </style></head><body><div class="wrap" id="top">
 <h1>NCEC ECU Map Analysis &mdash; Full Reference (English)</h1>
-<p class="sub">Spare Mazda NCEC (Roadster / MX-5) ECU &middot; Renesas SH7058 &middot; CAL ID <b>LFG7EG</b> &middot; base ROM <code>ncec_rom_dump.bin</code> &middot; LibreTuner definitions &middot; 126 categories / 909 tables, fully reviewed &middot; generated 2026-10-09.</p>
-<div class="warn">⚠ These notes are based on <b>reading values/units from one bench ECU</b>. <b>No flashing was performed</b> (no SBL, so writing is not possible). Numbers are the as-read calibration of this single unit and may differ on other units / CAL IDs. Categories marked <span class="badge fix">i18n fix</span> had a unit, axis-label or translation correction in <code>ncecu/i18n.py</code> (see <code>unit_fixes_i18n.md</code>).</div>
+<p class="sub">Spare Mazda NCEC (Roadster / MX-5) ECU &middot; Renesas SH7058 &middot; CAL ID <b>LFG7EG</b> &middot; base ROM <code>ncec_rom_dump.bin</code> &middot; LibreTuner definitions &middot; 126 categories / 909 tables, fully reviewed &middot; generated 2026-10-09 &middot; updated 2026-10-12 (flash status refreshed).</p>
+<div class="warn">⚠ These notes are based on <b>reading values/units from one bench ECU</b>. Real flashing is <b>validated (SBL obtained)</b>: on the spare/bench ECU and <b>via the car's OBD2 port (CAN-H / CAN-L / GND)</b>, both over the existing DSD TECH SH-C30L — no extra interface (method: an unmodified read-back plus immobilizer-disable edited flashes, verified on hardware). Only your own ECU / vehicle. Numbers are the as-read calibration of this single unit and may differ on other units / CAL IDs. Categories marked <span class="badge fix">i18n fix</span> had a unit, axis-label or translation correction in <code>ncecu/i18n.py</code> (see <code>unit_fixes_i18n.md</code>).</div>
 <h2 id="flow">Map relationships &mdash; flowcharts</h2>
 <p class="sub">How the categories connect. Colours group the subsystems used in the table of contents below.</p>
 <figure class="flowwrap">
 
 <svg viewBox="0 0 980 560" class="flow" role="img" aria-label="Overall ECU control flow">
 <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" class="arh"/></marker></defs>
-<rect x="40" y="40" width="220" height="52" rx="7" class="n s"/><text x="150.0" y="63.5" class="t">Sensors</text><text x="150.0" y="78.5" class="t">MAF·MAP·ECT·IAT·TPS/APP·CKP/CMP·Knock·O2·VSS·Baro</text>
+<rect x="40" y="38" width="220" height="62" rx="7" class="n s"/><text x="150.0" y="57.0" class="t">Sensors</text><text x="150.0" y="73.0" class="t">MAF·MAP·ECT·IAT·TPS/APP</text><text x="150.0" y="89.0" class="t">CKP/CMP·Knock·O2·VSS·Baro</text>
 <rect x="360" y="120" width="260" height="52" rx="7" class="n h"/><text x="490.0" y="136.0" class="t">Airflow &amp; Load calc</text><text x="490.0" y="151.0" class="t">MAF Scaling → Load Scaling (VE)</text><text x="490.0" y="166.0" class="t">MAP (aux) → Engine Load</text>
 <rect x="60" y="270" width="240" height="82" rx="7" class="n f"/><text x="180.0" y="293.5" class="t">FUEL PATH</text><text x="180.0" y="308.5" class="t">Target AFR (CL/OL) · base IPW</text><text x="180.0" y="323.5" class="t">corrections · O2 feedback</text><text x="180.0" y="338.5" class="t">(STFT / LTFT)</text><rect x="370" y="270" width="240" height="82" rx="7" class="n k"/><text x="490.0" y="293.5" class="t">SPARK PATH</text><text x="490.0" y="308.5" class="t">Base advance (fuel-request)</text><text x="490.0" y="323.5" class="t">+ temp/cold/EGR/knock/idle/tip-in</text><text x="490.0" y="338.5" class="t">→ limits → per-cylinder → dwell</text><rect x="690" y="270" width="250" height="82" rx="7" class="n a"/><text x="815.0" y="293.5" class="t">AIR / TORQUE / THROTTLE</text><text x="815.0" y="308.5" class="t">Pedal → torque req (BMEP)</text><text x="815.0" y="323.5" class="t">→ DBW throttle · Cruise</text><text x="815.0" y="338.5" class="t">VVT / IMRC / IMTV → VE</text>
 <rect x="40" y="392" width="250" height="46" rx="7" class="n o"/><text x="165.0" y="420.0" class="t">Injectors (pulse width)</text><rect x="370" y="392" width="240" height="46" rx="7" class="n o"/><text x="490.0" y="420.0" class="t">Ignition coils (spark)</text><rect x="690" y="392" width="250" height="46" rx="7" class="n o"/><text x="815.0" y="420.0" class="t">Throttle actuator</text>
-<rect x="40" y="470" width="900" height="66" rx="7" class="n m"/><text x="490.0" y="508.0" class="t">Cross-cutting layers:  Limiters (RPM / VSS / Load over-speed &amp; clamp)   ·   Data Integrity / torque-&amp;-throttle monitor (fail-safe, DTC P0601)   ·   Diagnostics (DTC Flags &amp; Thresholds)   ·   Emissions (Catalyst estimate / EGR / EVAP)   ·   Fan control   ·   Gear detection</text>
+<rect x="40" y="468" width="900" height="70" rx="7" class="n m"/><text x="490.0" y="497.0" class="t">Cross-cutting layers:  Limiters (RPM / VSS / Load over-speed &amp; clamp)   ·   Data Integrity / torque-&amp;-throttle monitor (fail-safe, DTC P0601)</text><text x="490.0" y="519.0" class="t">Diagnostics (DTC Flags &amp; Thresholds)   ·   Emissions (Catalyst estimate / EGR / EVAP)   ·   Fan control   ·   Gear detection</text>
 <!-- arrows -->
-<path class="e" d="M150,92 L150,120" marker-end="url(#ar)"/>
-<path class="e" d="M490,150 L490,180" marker-end="url(#ar)"/>
-<path class="e" d="M300,232 L180,270" marker-end="url(#ar)"/>
-<path class="e" d="M490,232 L490,270" marker-end="url(#ar)"/>
-<path class="e" d="M680,232 L800,270" marker-end="url(#ar)"/>
+<path class="e" d="M200,100 L400,120" marker-end="url(#ar)"/>
+<path class="e" d="M490,172 L185,270" marker-end="url(#ar)"/>
+<path class="e" d="M490,172 L490,270" marker-end="url(#ar)"/>
+<path class="e" d="M490,172 L805,270" marker-end="url(#ar)"/>
 <path class="e" d="M165,352 L165,392" marker-end="url(#ar)"/>
 <path class="e" d="M490,352 L490,392" marker-end="url(#ar)"/>
 <path class="e" d="M815,352 L815,392" marker-end="url(#ar)"/>
-<text x="250" y="258" class="lbl">Load, RPM</text>
-<text x="560" y="258" class="lbl">Load, RPM</text>
+<text x="300" y="228" class="lbl">Load, RPM</text>
+<text x="680" y="228" class="lbl">Load, RPM</text>
 </svg>
 
 <figcaption>1. Overall ECU control flow — sensors feed an airflow/Load estimate (the Y-axis of every map), which with RPM drives the fuel, spark and air/torque paths; limiters, the torque/throttle monitor, diagnostics and emissions wrap around them.</figcaption>
@@ -84,7 +83,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <path class="e" d="M180,196 L180,236" marker-end="url(#arf)"/>
 <path class="e" d="M300,268 L430,268" marker-end="url(#arf)"/>
 <path class="e" d="M650,268 L720,268" marker-end="url(#arf)"/>
-<path class="e" d="M770,236 L770,196" marker-end="url(#arf)"/>
+<path class="e" d="M770,236 L770,182" marker-end="url(#arf)"/>
 <text x="330" y="262" class="lbl">+ corrections</text>
 </svg>
 
@@ -97,9 +96,10 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <rect x="90" y="44" width="320" height="52" rx="7" class="n k"/><text x="250.0" y="60.0" class="t">Base advance map</text><text x="250.0" y="75.0" class="t">Low / High Fuel Request (switched by transition)</text><text x="250.0" y="90.0" class="t">plain / IMRC columns</text><rect x="90" y="140" width="320" height="80" rx="7" class="n c"/><text x="250.0" y="162.5" class="t">Adders / correctors (°)</text><text x="250.0" y="177.5" class="t">ECT-IAT temp comp · Cold Advance · EGR Advance</text><text x="250.0" y="192.5" class="t">Knock Retard (KS detect → KR)</text><text x="250.0" y="207.5" class="t">Tip-in (From-Stop/1st/High-Speed/Anti-Lug/Shared)</text><rect x="90" y="260" width="320" height="64" rx="7" class="n c"/><text x="250.0" y="282.0" class="t">Idle governor &amp; transitions</text><text x="250.0" y="297.0" class="t">Spark Idle Limit / Idle Error / AC-PS cycle</text><text x="250.0" y="312.0" class="t">Transition from Decel / In-Gear→Idle / Stumble</text><rect x="730" y="140" width="210" height="64" rx="7" class="n k"/><text x="835.0" y="162.0" class="t">Ceiling / clamp</text><text x="835.0" y="177.0" class="t">Spark Base Limit</text><text x="835.0" y="192.0" class="t">→ Spark Limits (final)</text><rect x="730" y="250" width="210" height="60" rx="7" class="n k"/><text x="835.0" y="270.0" class="t">Final stage</text><text x="835.0" y="285.0" class="t">Attack-rate limiter</text><text x="835.0" y="300.0" class="t">per-cylinder trim</text><rect x="90" y="360" width="320" height="40" rx="7" class="n o"/><text x="250.0" y="385.0" class="t">Coil dwell (charge time, ms)</text><rect x="730" y="340" width="210" height="40" rx="7" class="n o"/><text x="835.0" y="365.0" class="t">Spark out → coils</text>
 <path class="e" d="M250,96 L250,140" marker-end="url(#ars)"/>
 <path class="e" d="M250,220 L250,260" marker-end="url(#ars)"/>
-<path class="e" d="M470,172 L730,172" marker-end="url(#ars)"/>
+<path class="e" d="M410,172 L730,172" marker-end="url(#ars)"/>
 <path class="e" d="M250,324 L250,360" marker-end="url(#ars)"/>
-<path class="e" d="M470,390 L730,300" marker-end="url(#ars)"/>
+<path class="e" d="M835,204 L835,250" marker-end="url(#ars)"/>
+<path class="e" d="M835,310 L835,340" marker-end="url(#ars)"/>
 </svg>
 
 <figcaption>3. Spark path — a fuel-request base advance map, plus temperature/cold/EGR/knock/idle/tip-in correctors, clamped by Spark Base Limit then Spark Limits, distributed per cylinder with a rate limiter, and delivered as coil dwell.</figcaption>
@@ -111,10 +111,11 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <rect x="90" y="34" width="240" height="52" rx="7" class="n a"/><text x="210.0" y="57.5" class="t">Pedal (APP)</text><text x="210.0" y="72.5" class="t">→ Throttle Duty Desired (per gear)</text><rect x="90" y="120" width="240" height="60" rx="7" class="n a"/><text x="210.0" y="147.5" class="t">Torque request model (BMEP)</text><text x="210.0" y="162.5" class="t">+ Cruise Control target</text><rect x="90" y="214" width="240" height="52" rx="7" class="n a"/><text x="210.0" y="237.5" class="t">Throttle angle conversion</text><text x="210.0" y="252.5" class="t">(% → degrees)</text><rect x="560" y="120" width="300" height="60" rx="7" class="n m"/><text x="710.0" y="140.0" class="t">Data Integrity monitor (fail-safe)</text><text x="710.0" y="155.0" class="t">Throttle-duty &amp; torque-request thresholds</text><text x="710.0" y="170.0" class="t">→ DTC P0601 / limp</text><rect x="560" y="214" width="300" height="60" rx="7" class="n a"/><text x="710.0" y="241.5" class="t">VVT (VCT target) · IMRC · IMTV</text><text x="710.0" y="256.5" class="t">change VE  →  feed back into Load</text><rect x="90" y="300" width="240" height="50" rx="7" class="n o"/><text x="210.0" y="330.0" class="t">Throttle actuator</text><rect x="560" y="300" width="300" height="50" rx="7" class="n i"/><text x="710.0" y="322.5" class="t">Idle Speed control (base/max, comp,</text><text x="710.0" y="337.5" class="t">transition delay) — trims throttle &amp; spark</text><rect x="90" y="382" width="770" height="34" rx="7" class="n l"/><text x="475.0" y="404.0" class="t">Limiters override:  rev limit → fuel cut / throttle cut   ·   VSS limiter   ·   Load clamp</text>
 <path class="e" d="M210,86 L210,120" marker-end="url(#ara)"/>
 <path class="e" d="M210,180 L210,214" marker-end="url(#ara)"/>
-<path class="e" d="M410,150 L560,150" marker-end="url(#ara)"/>
-<path class="e" d="M410,244 L560,244" marker-end="url(#ara)"/>
+<path class="e" d="M330,150 L560,150" marker-end="url(#ara)"/>
+<path class="e" d="M330,244 L560,244" marker-end="url(#ara)"/>
 <path class="e" d="M770,180 L770,214" marker-end="url(#ara)"/>
-<path class="e" d="M560,330 L410,330" marker-end="url(#ara)"/>
+<path class="e" d="M560,330 L334,330" marker-end="url(#ara)"/>
+<path class="e" d="M210,266 L210,300" marker-end="url(#ara)"/>
 <text x="470" y="144" class="lbl">monitor</text>
 </svg>
 
@@ -133,7 +134,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li><a href="#g-j">J. Data Integrity / Monitoring</a> <span class="ct">(15)</span></li>
 <li><a href="#g-k">K. Diagnostics (DTC)</a> <span class="ct">(2)</span></li>
 <li><a href="#g-l">L. Limiters (RPM / VSS / Load)</a> <span class="ct">(5)</span></li>
-<li><a href="#g-m">M. Patches (Code)</a> <span class="ct">(6)</span></li>
+<li><a href="#g-m">M. Patches (Code)</a> <span class="ct">(7)</span></li>
 <li><a href="#g-n">N. Sensors / Vehicle</a> <span class="ct">(7)</span></li>
 <li><a href="#g-o">O. WIP / Misc</a> <span class="ct">(1)</span></li>
 <li><a href="#g-p">P. Real-car comparison &amp; Reverse-Engineering (torque model)</a> <span class="ct">(3)</span></li>
@@ -577,7 +578,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>Transition from Idle Add Retard Rate | Timer Expired (1×1, °) = 0.7. Rate at which the added advance is removed after the timer expires (°/cycle).</li>
 <li>Unit fix (i18n.py): &#x27;Add Timer&#x27; was mislabeled ° via category spark→°; it is a timer (count/time, not an angle) → unitless. Rule: &#x27;cold advance&#x27; and &#x27;add timer&#x27; → &quot;&quot;. &#x27;Add Retard Rate | Timer Expired&#x27; is a °/cycle rate so excluded, kept ° (matching the codebase Rate=° convention).</li>
 <li>Regression: other spark timer items (Restore Advance Rate=°, Transition Timer Reset=unitless, Retard Multiplier=×, Max Retard=°) unchanged.</li>
-<li>Note: values verified on the bench only; not flashed (no SBL).</li>
+<li>Note: values verified on the bench; flashing validated on the spare/bench ECU (SBL obtained).</li>
 </ul></div>
 <div class="cat">
 <h3>Spark Comp - EGR Advance <span class="ct">(4 tables)</span></h3>
@@ -876,6 +877,17 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>Units: all 11 ° correct (spark timing upper/lower limits). No mislabel. No unit fix.</li>
 </ul></div>
 <div class="cat">
+<h3>Spark Limits (note: final output path) <span class="badge fix">new in v1.30</span></h3>
+<div class="meta">category id: Spark Limits &nbsp;|&nbsp; note: spark-output-path &nbsp;|&nbsp; 2026-10-16</div>
+<ul>
+<li>Task 0x4D8DA computes the final advance as clamp(0x7AE0+0x7B98+0x7DA4, max retard = RAM 0xFFFF7AFC, max advance = @0xCE20C 50°) and stores it to RAM 0xFFFF7AA4 (clamp helper 0x2404, called at 0x4D9D0).</li>
+<li>Task 0x4D84E rate-limits 0x7AA4 on the advance side into 0xFFFF7AA0 (source of OBD PID 0x0E timing advance), then adds the per-cylinder trims @0xCE1F4/F8/FC/0xCE200 to make per-cylinder spark 0xFFFF7AC8/7ACC/7AD0/7AD4.</li>
+<li>0x19B44 picks the per-cylinder value by cylinder index and sets the ignition event angle as (advance − 9.8) × 65536. This is the actual spark.</li>
+<li>0xFFFF7AAC/7AB0 written by task 0x4DD58 feed the torque model only (spark efficiency = 1 − k·(ref − spark)²); they do not drive ignition.</li>
+<li>RTOS task-table order: 0x180F8 = 0x4D8DA → 0x180FC = 0x4DD58 → 0x18100 = 0x4D84E.</li>
+<li>Practical: a code patch that changes spark must act before the clamp that produces 0x7AA4 (the flat-shift ignition-retard patch does this).</li>
+</ul></div>
+<div class="cat">
 <h3>Spark To Cylinders <span class="ct">(5 tables)</span></h3>
 <div class="meta">category id: Spark To Cylinders &nbsp;|&nbsp; note: spark-to-cylinders &nbsp;|&nbsp; 2026-10-09</div>
 <ul>
@@ -916,7 +928,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>Increment Rate To Target (2) = speed of raising to target. non-idle 0.3 / idle 0.4.</li>
 <li>Unit fix (i18n.py): &#x27;Warm-Up Fuel Target&#x27; was mislabeled &#x27;unitless&#x27; by the warm+fuel-target→unitless rule, but it is an advance-correction target (18° is within idle-correction range). Rule: &#x27;spark idle correction&#x27; and &#x27;target&#x27; and not multiplier → °. Consistent with the other 10 target/rate tables (already °), scoped to this WIP category only (non-spark Warm-Up Fuel Target = &#x27;&#x27;/× unchanged).</li>
 <li>Result: Warm-Up Fuel Target 1 unitless→°. Others unchanged (×3/°10).</li>
-<li>Note: WIP (incomplete) — verify behaviour; rate 100 is presumed an instant-apply sentinel. Bench-verified only, not flashed (no SBL).</li>
+<li>Note: WIP (incomplete) — verify behaviour; rate 100 is presumed an instant-apply sentinel. Bench values; flashing validated on the spare/bench ECU (SBL obtained).</li>
 </ul></div>
 <div class="cat">
 <h3>Spark Idle Limit <span class="ct">(2 tables)</span></h3>
@@ -1022,7 +1034,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>  (1) &#x27;vct error&#x27; and &#x27;rpm threshold&#x27; and not multiplier/correction → rpm (the 2 RPM Threshold/Hysteresis tables).</li>
 <li>  (2) &#x27;vct error&#x27; and &#x27;correction to apply&#x27; → unitless (−600…400 exceeds the phaser range, not cam angle; an OCV-controller output).</li>
 <li>The multiplier group keeps × (later &#x27;multiplier&#x27;→×), CKP/CMP Offset=°, OCV=% preserved. VCT Base unchanged, no leakage.</li>
-<li>Note: do-not-modify category. Bench-verified only, not flashed (no SBL).</li>
+<li>Note: do-not-modify category. Bench values; flashing validated on the spare/bench ECU (SBL obtained).</li>
 </ul></div>
 <h2 id="g-g">G. Intake (IMRC / IMTV) <span class="ct">(2)</span></h2>
 <div class="cat">
@@ -1044,7 +1056,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>Increment Rate Divisor (1×11, MAF g/s axis) = all 1000: denominator for advancing toward the new port. Advance (1000) slower than return (200) = gentle transition even on abrupt WOT.</li>
 <li>Interpolation Bias (1×5) = weights 0/0.25/0.6/0.8/1.0 for transition progress 0/30/70/85/100%. Non-linear (S-curve) mapping of progress to actual port-opening interpolation.</li>
 <li>Unit fix (axis): the X-axis internal name &#x27;2500/IMRC_DIVISOR_82DC&#x27; was aliased to &#x27;IMRC transition progress (%)&#x27; (added AXIS_SPECIAL, dedicated to Interpolation Bias, no misfire). Each table&#x27;s unit_of is already correct (°C/rpm/%, with Load/Divisor/Bias shown dimensionless) — no unit_of change.</li>
-<li>Note: AT-only logic, likely inactive on MT. Bench-verified only, not flashed.</li>
+<li>Note: AT-only logic, likely inactive on MT. Bench values; flashing validated on the spare/bench ECU (SBL obtained).</li>
 </ul></div>
 <div class="cat">
 <h3>Intake Manifold Tuning Valve <span class="ct">(6 tables)</span></h3>
@@ -1092,7 +1104,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>APP to Throttle Duty Desired - WIP, Brake On, VSS LT 2kph, AT (1×18, X=APP %, %) = 0–100. Pedal→target throttle duty under brake-on, VSS&lt;2 km/h, AT.</li>
 <li>Values are nearly 1:1 with a deadband at low opening (0–2.3%)→0. A WIP map for throttle control under braking at near-standstill (AT) — brake override / creep control.</li>
 <li>Unit % correct (throttle duty). No mislabel. No unit fix.</li>
-<li>Note: WIP. Bench-verified only, not flashed.</li>
+<li>Note: WIP. Bench values; flashing validated on the spare/bench ECU (SBL obtained).</li>
 </ul></div>
 <div class="cat">
 <h3>DBW - Throttle Duty Desired Comp - Aggregate <span class="ct">(5 tables)</span></h3>
@@ -1311,7 +1323,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>BYPASSED - WIP (29×12, X=RPM/Y=APP, current unit N·m, float 5.6–22) = value set 5.6/5.79/6.23/10.19/16.37/22.0 (stepped by APP, flat across RPM).</li>
 <li>Nature: BYPASSED = unused by ECU logic (routed around), WIP = in progress. The discrete value set exactly matches &#x27;Throttle Duty Delta Threshold (%)&#x27; = apparently a placeholder copied from the %-table.</li>
 <li>Unit handling: inferred N·m via category &#x27;torque&#x27;, but being unused and a copy of the %-table, whether it is a torque-threshold template (N·m) or just the %-values is indeterminate. Not a clear error, so left N·m (no-guess policy). No code change.</li>
-<li>Note: bench-verified only, not flashed.</li>
+<li>Note: bench values; flashing validated on the spare/bench ECU (SBL obtained).</li>
 </ul></div>
 <h2 id="g-k">K. Diagnostics (DTC) <span class="ct">(2)</span></h2>
 <div class="cat">
@@ -1354,11 +1366,22 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <div class="meta">category id: Engine Limiters - RPM &nbsp;|&nbsp; note: limiter-rpm-rev &nbsp;|&nbsp; 2026-10-06</div>
 <ul>
 <li>RPM over-speed protection. Two systems: fuel cut (stop injection) and throttle cut (close the throttle).</li>
-<li>Throttle cut (2): | clutch pressed @0xC53BC = 6500 rpm (neutral-blip over-rev protection). | clutch released @0xC53C0 = 10000 rpm (while driving = effectively disabled; fuel cut comes first).</li>
+<li>Throttle cut (2): | clutch pressed @0xC53BC = 6500 rpm (only below 2 km/h = standstill; neutral-blip over-rev protection). | clutch released @0xC53C0 = 10000 rpm (while driving = effectively disabled; fuel cut comes first).</li>
 <li>Fuel cut (9): primary low-ECT threshold @0xC47A4 = -15°C / hys @0xC47A8 = 5°C. | ECT below primary threshold or ECT input fault @0xC4870 = 5500 rpm. secondary low-ECT threshold @0xC47AC = -15°C / hys @0xC47B0 = 5°C. | below secondary threshold, at start @0xC4874 = 5500 rpm. | AT 73C0 timer active @0xC4878 = 6500 rpm. | AT timer expired, MT @0xC487C = 7500 rpm (the effective rev limit). hysteresis A (zero) | 73C5 delay active @0xC4880 = 0 rpm.</li>
 <li>Summary: normally (MT warm) fuel cut at 7500 rpm. Cold/low-ECT or ECT fault drops to 5500 rpm (thresholds/hys are the judges). Neutral-blip over-rev gives throttle cut at 6500 rpm (10000 while driving = effectively off).</li>
 <li>Coupling/note: raise mainly #10 (the real rev limit), and always verify valvetrain/driveline limits — exceeding the mechanical limit destroys the engine. Matches the manual Ch.3 &#x27;RPM limiters&#x27;.</li>
 <li>Display (fixed 2026-10-06): the 2 throttle-cut values were % via throttle→% → rpm; the low-ECT thresholds/hys were rpm via rev-limit→rpm → °C (added rev-limit handling in unit_of). Fuel-cut RPMs (5500/6500/7500/0) kept rpm.</li>
+</ul></div>
+<div class="cat">
+<h3>Engine Limiters - RPM (note: vehicle-speed gate of the clutch throttle cut; +2 extra items) <span class="badge fix">new in v1.30</span></h3>
+<div class="meta">category id: Engine Limiters - RPM &nbsp;|&nbsp; note: cpp-throttle-cut-speed-gate &nbsp;|&nbsp; 2026-10-16</div>
+<ul>
+<li>Routine 0x097346: limit = (vehicle speed &lt; @0xC53B8 (2.0 km/h) AND clutch pressed) ? @0xC53BC (6500 rpm) : @0xC53C0 (10000 rpm). Flag 0xFFFF3827 = RPM &gt; limit (hysteresis −@0xC53C4 = 100 rpm while active).</li>
+<li>Emulator check: clutch pressed at 7100 rpm → set at 0 / 1.9 km/h, not set at 2.1 / 60 km/h. Never set with the clutch released.</li>
+<li>So &#x27;raise CPP set (@0xC53BC) for flat shift&#x27; (the v1.10 claim) is wrong: nothing happens on moving shifts. It is a standstill free-rev limiter, usable as a launch RPM limiter.</li>
+<li>@0xC53B8 (speed threshold) and @0xC53C4 (hysteresis) are missing from the LibreTuner definition; the editor shows them as extra items in this category (v1.30+, out-of-range input rejected).</li>
+<li>Raising the speed threshold (e.g. 300 km/h) should make the clutch throttle cut work while moving as well — untested.</li>
+<li>Related RAM: clutch 0xFFFF6FCC (byte, non-zero = pressed; helper 0x1B978 just reads this byte), vehicle speed 0xFFFF6D04 (float km/h, PID 0x0D source), RPM 0xFFFF37DC (ETC copy; master 0xFFFF6D5C = PID 0x0C source).</li>
 </ul></div>
 <div class="cat">
 <h3>Engine Limiters - RPM <span class="ct">(11 tables)</span></h3>
@@ -1406,7 +1429,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>Summary: engine Load = airflow × Load Scaling (+ VCT correction when cam advance &gt;5°). This is the Y-axis of all spark/fuel/VVT maps. Most fundamental and far-reaching; changes require measurement (wideband / VE analysis).</li>
 <li>Display (fixed 2026-10-06): #2 was ° via &#x27;VCT&#x27; but the value is a Load-Scaling add (VCT&gt;5 is a condition). Added &#x27;load scaling is unitless&#x27;. MAF Scaling=g/s and VCT Target=° preserved.</li>
 </ul></div>
-<h2 id="g-m">M. Patches (Code) <span class="ct">(6)</span></h2>
+<h2 id="g-m">M. Patches (Code) <span class="ct">(7)</span></h2>
 <div class="cat">
 <h3>Patch - Decel <span class="ct">(overview)</span></h3>
 <div class="meta">category id: Patch - Decel &nbsp;|&nbsp; note: patch-dfco &nbsp;|&nbsp; 2026-10-04</div>
@@ -1424,7 +1447,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>State: unpatched=36610 (0x8F02 = the conditional-branch instruction intact = DFCO enabled / normal). patched=9 (0x0009 = NOP) kills the branch, disabling DFCO = fuel always injected.</li>
 <li>Current 36610 = unpatched → DFCO operates normally on this unit. Writing 9 NOPs it out, disabling DFCO.</li>
 <li>Unit &#x27;-&#x27; correct (a raw instruction word / opcode, not a physical quantity). No mislabel. No unit fix.</li>
-<li>Note: a code-region patch; applying it requires checksum recalculation + real flashing (not possible on the bench, no SBL). Disabling DFCO affects economy / overrun behaviour / catalyst temperature. The category name&#x27;s trailing space is a def inconsistency.</li>
+<li>Note: a code-region patch; applying it requires checksum recalculation + real flashing (now validated on the spare/bench ECU; SBL obtained). Disabling DFCO affects economy / overrun behaviour / catalyst temperature. The category name&#x27;s trailing space is a def inconsistency.</li>
 </ul></div>
 <div class="cat">
 <h3>Patch - Engine Displacement <span class="ct">(4 tables)</span> <span class="badge fix">i18n fix</span></h3>
@@ -1437,7 +1460,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>replace NaN value with engine displacement in cc (@0xFBA00, float) = currently NaN (unset). Write the real displacement in cc here (patched=1030656 points to this 0xFBA00). Unit = cc.</li>
 <li>Mechanism: redirect A/B/C to 0xFBA00 and store the new displacement (cc) at 0xFBA00. Used when changing from the original 2.0L (LF ~1999cc).</li>
 <li>Unit fix (i18n.py): Patch Address A/B/C were mislabeled cc via displacement→cc. They are ROM addresses (pointers). Rule: &#x27;engine displacement&#x27; and &#x27;patch address&#x27; → unitless. The real displacement value (replace NaN…in cc) keeps cc. No other displacement table, so no leakage.</li>
-<li>Note: a code/constant patch; applying needs checksum recalc + real flashing (bench, no SBL). Apply all 4 together (3 pointers + 1 value).</li>
+<li>Note: a code/constant patch; applying needs checksum recalc + real flashing (validated on the spare/bench ECU; SBL obtained). Apply all 4 together (3 pointers + 1 value).</li>
 </ul></div>
 <div class="cat">
 <h3>Patch - Immobilizer Disable <span class="ct">(1 table)</span></h3>
@@ -1449,7 +1472,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>Current 36616 = unpatched → immobilizer check active on this unit. Writing 9 skips the key/BCM check, allowing start without the immobilizer.</li>
 <li>Use: common for bench standalone start / engine swap / standalone operation (running the ECU without the original key/BCM). Being an anti-theft defeat, limit to your own vehicle / bench ECU.</li>
 <li>Unit &#x27;-&#x27; correct (raw instruction word / opcode). No mislabel. No unit fix.</li>
-<li>Note: a code patch; applying needs checksum recalc + real flashing (bench, no SBL). Same &#x27;0x8Fxx branch → NOP (9)&#x27; technique as the DFCO-disable patch (0x45976, 0x8F02→9).</li>
+<li>Note: a code patch; applying needs checksum recalc + real flashing (validated on the spare/bench ECU; SBL obtained). Same &#x27;0x8Fxx branch → NOP (9)&#x27; technique as the DFCO-disable patch (0x45976, 0x8F02→9).</li>
 </ul></div>
 <div class="cat">
 <h3>Patch - Open Loop Short Term Fuel Trim Fix <span class="ct">(1 table)</span></h3>
@@ -1461,7 +1484,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>Purpose: in open-loop regions (high load/WOT) STFT should be held (frozen), but the stock branch condition applies/holds STFT improperly; the known fix makes the branch unconditional to correct it.</li>
 <li>Current 141 = unpatched.</li>
 <li>Unit &#x27;-&#x27; correct (raw instruction byte / opcode). No mislabel. No unit fix.</li>
-<li>Note: a code patch; applying needs checksum recalc + real flashing (bench, no SBL).</li>
+<li>Note: a code patch; applying needs checksum recalc + real flashing (validated on the spare/bench ECU; SBL obtained).</li>
 </ul></div>
 <div class="cat">
 <h3>Patch - UDS Read Memory By Address (Mode 23) <span class="ct">(3 tables)</span></h3>
@@ -1473,7 +1496,18 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>Patch @0x84C07 (uint8): unpatched=6 (0x06) → patched=15 (0x0F). Changes a permission flag/parameter in the same table.</li>
 <li>Currently all unpatched = Mode 23 disabled. Reading via 0x23 opens only after all three are applied.</li>
 <li>Units: all 3 &#x27;-&#x27; correct (raw code/table bytes, not physical quantities). No mislabel. No unit fix.</li>
-<li>Note: a code/table patch; applying needs checksum recalc + real flashing (bench, no SBL). It opens arbitrary-address memory reads, so limit to analyzing/logging your own ECU. Includes the same &#x27;0x8Fxx branch → NOP (9)&#x27; technique as DFCO/immobilizer disable.</li>
+<li>Note: a code/table patch; applying needs checksum recalc + real flashing (validated on the spare/bench ECU; SBL obtained). It opens arbitrary-address memory reads, so limit to analyzing/logging your own ECU. Includes the same &#x27;0x8Fxx branch → NOP (9)&#x27; technique as DFCO/immobilizer disable.</li>
+</ul></div>
+<div class="cat">
+<h3>Patch - Flat Shift Ignition Retard (4, extra items) <span class="badge fix">new in v1.30</span></h3>
+<div class="meta">category id: Patch - Flat Shift Ignition Retard &nbsp;|&nbsp; note: patch-flatshift-retard &nbsp;|&nbsp; 2026-10-16</div>
+<ul>
+<li>Draft 3 (for bench validation). Implementation: ncecu/flatshift.py. Apply with tools/patch_flatshift_retard.py or the editor&#x27;s &#x27;Flat-shift retard&#x27; button.</li>
+<li>Hook: literal @0x4DA98 (used by the clamp call at 0x4D9D0) → cave 0xDE200. When the conditions hold, the retard is subtracted from the final advance before the stock clamp 0x2404 (floored by the stock max retard). Special-mode paths bypass it.</li>
+<li>Conditions: clutch 0xFFFF6FCC ≠ 0 AND APP 0xFFFF56C8 &gt; @0xDE260 (default 80%) AND RPM 0xFFFF6D5C &gt; @0xDE264 (default 7000) AND speed 0xFFFF6D04 &gt; @0xDE268 (default 10 km/h). Retard amount @0xDE26C (default 20°).</li>
+<li>Editor: the 4 items appear only for ROMs with the patch applied; out-of-range input is rejected (APP 0–100 / RPM 3000–7500 / speed 0–250 / retard 0–30).</li>
+<li>Verification: disassembly + 1484 emulator cases match the stock math (0x7B98 − retard). Not tested on hardware yet. Live timing PID 0x0E (= 0x7AA0) should show the retard.</li>
+<li>RAM notes: APP % = 0xFFFF56C8 (final APP1/APP2 value 0–100; copy 0xFFFF6CA4). The definition&#x27;s axis label &#x27;APP_6D1C&#x27; is wrong: 0x6D1C–0x6D30 is vehicle-speed history and 0x6D10 is acceleration.</li>
 </ul></div>
 <h2 id="g-n">N. Sensors / Vehicle <span class="ct">(7)</span></h2>
 <div class="cat">
@@ -1567,7 +1601,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>Voltage Desired Add | RPM LT 5K, Load LT 0.80: rpm → V (voltage add -1.3–0).</li>
 <li>WIP Limit | RPM below 312 or RPM LT Idle Speed: rpm → × (0–1 limit factor).</li>
 <li>Added rule: for category containing &#x27;alternator&#x27; and &#x27;wip&#x27;, &#x27;voltage desired&#x27;→V, &#x27;wip limit&#x27;→×. Base RPM Threshold (RPM is the subject) kept rpm. Non-WIP alternator categories unchanged.</li>
-<li>Note: WIP (incomplete). Bench-verified only, not flashed. Undefined items are of undetermined meaning.</li>
+<li>Note: WIP (incomplete). Bench values; flashing validated on the spare/bench ECU (SBL obtained). Undefined items are of undetermined meaning.</li>
 </ul></div>
 <h2 id="g-p">P. Real-car comparison &amp; Reverse-Engineering (torque model) <span class="ct">(3)</span></h2>
 <div class="cat">
@@ -1585,7 +1619,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>• Spark Base - High Fuel Request | Low-Det: 98/210 cells (max Δ −5°).</li>
 <li>• Spark Base Limit | Low Fuel Request: 93/210 cells (max Δ +6.7°).</li>
 <li>The undefined differing region (0xC16D8–0xC41FC) was fully reverse-engineered as the spark-efficiency torque model (see the Torque Model Bank note).</li>
-<li>Operations: anything flashed to the real car must be based on ecu_readout_original.bin, not ncec_rom_dump.bin. Checksums: bench @0xFF73C = 0x5128235A / car = 0x871E876C. No SBL yet, so no writing.</li>
+<li>Operations: anything flashed to the real car must be based on ecu_readout_original.bin, not ncec_rom_dump.bin. Checksums: bench @0xFF73C = 0x5128235A / car = 0x871E876C. SBL is obtained and flashing is validated (spare/bench ECU and the car's OBD2 port, CAN-H/CAN-L/GND). Anything flashed to the car must still start from the car-based ROM above.</li>
 <li>Deliverable: docs/ecu_diff_report.html (diff report with heatmaps).</li>
 </ul></div>
 <div class="cat">
@@ -1604,7 +1638,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>Evaluation path: generic interpolator 0x2068 / 2D variant 0x20DC, RAM-read helper 0x1B984; inputs include ECT (0xFFFF6D5C). Results go to RAM 0xFFFF70xx (e.g. 0xFFFF7074). A flag (0xFFFF5255) selects map variants. The 4 variants (one spark + one k each) are 4 complete (torque, MBT-spark, k) triples; the exact selector condition (cam phase / fuel request) is set by a state machine and not yet named.</li>
 <li>Diff: only the optimal-torque maps 03/10/11 differ bench↔car = only the torque output was current-car-matched. MBT spark, coefficients and the temp correction are identical.</li>
 <li>Definitions: category &#x27;WIP - Torque Model Bank (RE)&#x27;. Names by role (RE Torque = N·m / RE MBT Spark = ° / RE Model Factor spark-loss coeff = unitless), with (car!=bench) on the differing maps.</li>
-<li>Note: dimensions, axes, quantities and equation are confirmed. Only the exact split condition of the 4 variants remains. Bench-verified only; no flashing (no SBL).</li>
+<li>Note: dimensions, axes, quantities and equation are confirmed. Only the exact split condition of the 4 variants remains. Bench values; flashing validated on the spare/bench ECU (SBL obtained).</li>
 </ul></div>
 <div class="cat">
 <h3>WIP - DBW Torque Coordinator (RE) <span class="ct">(22 tables)</span> <span class="badge fix">i18n fix</span></h3>
@@ -1616,7 +1650,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
 <li>Coefficient / correction / small tables - 15 maps: @C0B38, @C0CC0, @C0E48, @C45C4, @C4DFC, @C4F98, @C5134, @C5E1C, @C65D4, @C66CC, @C67C4, @C68BC, @C69B4, @C7400, @C8A24. Dimensionless coefficients (~0-1) and internal corrections, presumed weights/correction terms of the coordination math (role at naming level only).</li>
 <li>Diff: all 22 are identical bench&lt;-&gt;car (zero differences) =&gt; the DBW torque-coordination layer was not current-car-matched; only the optimal-torque 3 maps (map03/10/11) were (see wip-torque-model-re).</li>
 <li>Definitions: category &#x27;WIP - DBW Torque Coordinator (RE)&#x27;. Added i18n unit rules (bmep-&gt;kPa / throttle-&gt;% / else unitless) and the JA translation &#x27;DBWトルク協調(RE)&#x27;. Dimensions/axes are descriptor-authoritative; names are by role (RE DBW BMEP Torque / RE DBW Throttle Duty / RE DBW Factor / RE DBW Table).</li>
-<li>Note: WIP. Dimensions, axes and the BMEP/throttle physical quantities are confirmed; the exact role of the 15 coefficient maps is not yet pinned down. Bench-verified only; no flashing (no SBL).</li>
+<li>Note: WIP. Dimensions, axes and the BMEP/throttle physical quantities are confirmed; the exact role of the 15 coefficient maps is not yet pinned down. Bench values; flashing validated on the spare/bench ECU (SBL obtained).</li>
 </ul></div>
 <h2 id="g-z">Other (Emissions / Fan / Gear Ratio) <span class="ct">(5)</span></h2>
 <div class="cat">
