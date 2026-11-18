@@ -361,6 +361,15 @@ class SH2:
                 r[n] = (r[n] - 4) & 0xFFFFFFFF; self.wr(r[n], 4, self.pr); return
             if sub == 0x26:  # lds.l @Rn+,PR
                 self.pr = self.rd(r[n], 4); r[n] = (r[n] + 4) & 0xFFFFFFFF; return
+            # MACH/MACL の退避・復帰(表引きルーチン 0x20DC などが乗算レジスタをスタックへ積む)
+            if sub == 0x02:  # sts.l MACH,@-Rn
+                r[n] = (r[n] - 4) & 0xFFFFFFFF; self.wr(r[n], 4, self.mach); return
+            if sub == 0x12:  # sts.l MACL,@-Rn
+                r[n] = (r[n] - 4) & 0xFFFFFFFF; self.wr(r[n], 4, self.macl); return
+            if sub == 0x06:  # lds.l @Rn+,MACH
+                self.mach = self.rd(r[n], 4); r[n] = (r[n] + 4) & 0xFFFFFFFF; return
+            if sub == 0x16:  # lds.l @Rn+,MACL
+                self.macl = self.rd(r[n], 4); r[n] = (r[n] + 4) & 0xFFFFFFFF; return
             if sub == 0x5A:  # lds Rn,FPUL
                 self.fpul = r[n]; return
             if sub == 0x6A:  # lds Rn,FPSCR
@@ -406,18 +415,18 @@ class SH2:
                 self.wr(r[0] + r[n], 4, r[m]); return
             if sub == 0x7:  # mul.l
                 self.macl = (r[n] * r[m]) & 0xFFFFFFFF; return
-            if sub == 0xA:
+            if sub == 0xA:  # STS 系（0000nnnn ssss 1010）: ssss で転送元を選ぶ
                 t = (op >> 4) & 0xF
-                if t == 0x2:  # sts MACL,Rn
-                    r[n] = self.macl; return
                 if t == 0x0:  # sts MACH,Rn
                     r[n] = self.mach; return
+                if t == 0x1:  # sts MACL,Rn
+                    r[n] = self.macl; return
+                if t == 0x2:  # sts PR,Rn
+                    r[n] = self.pr; return
                 if t == 0x5:  # sts FPUL,Rn
                     r[n] = self.fpul; return
                 if t == 0x6:  # sts FPSCR,Rn
                     r[n] = self.fpscr; return
-                if t == 0x2A or False:
-                    pass
             if op & 0xFF == 0x29:  # movt
                 r[n] = self.T; return
             if sub == 0x9 and ((op >> 4) & 0xF) == 0x2:  # movt alt

@@ -67,7 +67,7 @@ class ChartWindow(tk.Toplevel):
         order = [ch for ch in PID_LABEL if isinstance(ch, int) and ch in self.series]
         order += [ch for ch in self.series if ch not in order]
         self.order = order
-        prefer = [0x0C, 0x0E, 0x34, 0x44, 0x11, 0x102, 0x05]
+        prefer = [0x0C, 0x0E, 0x34, 0x44, 0x11, 0x114, 0x106, 0x05]  # 0x114=ノックレベル, 0x106=KR
         self.sel = {ch: tk.BooleanVar(value=(ch in prefer or len(self.series) <= 4))
                     for ch in order}
 
@@ -83,20 +83,55 @@ class ChartWindow(tk.Toplevel):
 
         body = tk.Frame(self, bg=BG)
         body.pack(fill="both", expand=True)
-        left = tk.Frame(body, bg=PANEL, width=170)
+        left = tk.Frame(body, bg=PANEL, width=186)
         left.pack(side="left", fill="y")
         left.pack_propagate(False)
         tk.Label(left, text="表示チャンネル", bg=PANEL, fg=FG, font=(self.jp, 10, "bold")
                  ).pack(anchor="w", padx=8, pady=(8, 2))
+        # チャンネル数が多い/ウィンドウが低いと一覧が見切れて選べなくなるため、縦スクロール可に。
+        wrap = tk.Frame(left, bg=PANEL)
+        wrap.pack(fill="both", expand=True)
+        lcv = tk.Canvas(wrap, bg=PANEL, highlightthickness=0)
+        vsb = ttk.Scrollbar(wrap, orient="vertical", command=lcv.yview)
+        lcv.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        lcv.pack(side="left", fill="both", expand=True)
+        inner = tk.Frame(lcv, bg=PANEL)
+        inner_id = lcv.create_window((0, 0), window=inner, anchor="nw")
+
+        def _sync_list(_e=None):
+            lcv.configure(scrollregion=lcv.bbox("all"))
+            lcv.itemconfigure(inner_id, width=lcv.winfo_width())
+            # 中身が収まる高さならスクロールバーは隠す
+            need = inner.winfo_reqheight() > lcv.winfo_height()
+            if need and not vsb.winfo_ismapped():
+                vsb.pack(side="right", fill="y")
+            elif not need and vsb.winfo_ismapped():
+                vsb.pack_forget()
+        inner.bind("<Configure>", _sync_list)
+        lcv.bind("<Configure>", _sync_list)
+
+        def _wheel_list(e):
+            if inner.winfo_reqheight() > lcv.winfo_height():
+                lcv.yview_scroll(-1 if e.delta > 0 else 1, "units")
+            return "break"
+        lcv.bind("<MouseWheel>", _wheel_list)
+        inner.bind("<MouseWheel>", _wheel_list)
+
         for i, ch in enumerate(order):
             name = PID_LABEL.get(ch, (f"0x{ch:X}",))[0]
             col = COLORS[i % len(COLORS)]
-            f = tk.Frame(left, bg=PANEL)
+            f = tk.Frame(inner, bg=PANEL)
             f.pack(fill="x", padx=6, pady=1)
-            tk.Frame(f, bg=col, width=12, height=12).pack(side="left", padx=(0, 4))
-            tk.Checkbutton(f, text=name, variable=self.sel[ch], bg=PANEL, fg=FG,
-                           selectcolor="#0e1116", activebackground=PANEL, activeforeground=FG,
-                           font=(self.jp, 9), command=self._redraw, anchor="w").pack(side="left", fill="x")
+            f.bind("<MouseWheel>", _wheel_list)
+            sw = tk.Frame(f, bg=col, width=12, height=12)
+            sw.pack(side="left", padx=(0, 4))
+            sw.bind("<MouseWheel>", _wheel_list)
+            cb = tk.Checkbutton(f, text=name, variable=self.sel[ch], bg=PANEL, fg=FG,
+                                selectcolor="#0e1116", activebackground=PANEL, activeforeground=FG,
+                                font=(self.jp, 9), command=self._redraw, anchor="w")
+            cb.pack(side="left", fill="x")
+            cb.bind("<MouseWheel>", _wheel_list)
 
         self.canvas = tk.Canvas(body, bg=BG, highlightthickness=0)
         self.canvas.pack(side="left", fill="both", expand=True)
@@ -178,7 +213,9 @@ class ChartWindow(tk.Toplevel):
             c.create_text(W / 2, H / 2, text="左でチャンネルを選択", fill=AX, font=(self.jp, 12))
             return
         top_pad, bot_pad = 8, 26
-        band_h = max(40, (H - top_pad - bot_pad) / len(sel))
+        # 選択数が多くてもプロット帯が下にはみ出して隠れないよう、常にウィンドウ内に収める
+        # (最小40px固定だと多選択＋低ウィンドウで下端が見切れていた)。
+        band_h = (H - top_pad - bot_pad) / max(1, len(sel))
 
         def tx(t):
             return px0 + plot_w * (t - self.view0) / max(1e-6, self.view1 - self.view0)

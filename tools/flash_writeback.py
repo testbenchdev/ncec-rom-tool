@@ -26,7 +26,7 @@ from ncecu.diag import DiagClient, NegativeResponse  # noqa: E402
 from ncecu.isotp import IsoTp, IsoTpError  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-DUMP = ROOT / "ncec_rom_dump.bin"
+DUMP = ROOT / "rom_data" / "ecu_readout_yahooauction.bin"   # ベンチECUの吸い出し原本(旧 ncec_rom_dump.bin と同一内容)
 LOG_DIR = ROOT / "logs"
 lines: list[str] = []
 
@@ -60,9 +60,13 @@ def read_id(diag: DiagClient, tag: str) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sbl", help="SBL バイナリ(0x1800バイト, NC1/start=0x2000)")
-    ap.add_argument("--rom", help="書き込むROM(既定=ncec_rom_dump.bin)。編集ROMはこれで指定")
+    ap.add_argument("--rom", help="書き込むROM(既定=rom_data/ecu_readout_yahooauction.bin)。編集ROMはこれで指定")
     ap.add_argument("--confirm", action="store_true", help="実際に消去+書き込みを行う(不可逆)")
     ap.add_argument("--verify-u16", help="書込み後、このアドレス(hex)の16bit(BE)を読み戻して表示")
+    ap.add_argument("--tx-floor", type=float, default=None,
+                    help="連続フレーム送信の最小間隔[秒]。既定0.001。例0.0005で高速化(FIFO溢れ注意・予備ECU)")
+    ap.add_argument("--drain-every", type=int, default=8,
+                    help="何フレーム毎にTXエコー吸い出し。既定8。32で約12%短縮(実測・tx_testで安定確認後に)")
     args = ap.parse_args()
 
     pristine = DUMP.read_bytes()
@@ -75,7 +79,7 @@ def main() -> None:
         f"{(args.sbl + ' (0x%X)' % len(sbl)) if sbl else '(なし=ドライラン)'}")
 
     bus = open_bus()
-    diag = DiagClient(IsoTp(bus))
+    diag = DiagClient(IsoTp(bus, drain_every=args.drain_every))
     diag.tp.timeout = 10.0   # 消去/フロー制御待ちに余裕を持たせる
     f = flash.Flasher(diag, log=out)
     try:
@@ -84,7 +88,8 @@ def main() -> None:
         before = read_id(diag, "書き込み前")
 
         out("[2] 書き込み " + ("(本番)" if (args.confirm and sbl) else "(ドライラン)"))
-        plan = f.flash(rom, sbl, flash_start=flash.ROM_FLASH_START_MIN, confirm=args.confirm)
+        plan = f.flash(rom, sbl, flash_start=flash.ROM_FLASH_START_MIN, confirm=args.confirm,
+                       tx_st_min_floor=args.tx_floor)
         out(f"  plan: {plan}")
 
         if not (args.confirm and sbl):

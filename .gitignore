@@ -6,11 +6,14 @@ ncec_rom_dump.bin
 *_sbl.bin
 sbl*.bin
 /Decryption_sbl/
+# 保存ROMデータ専用フォルダ(エディタの保存/吸い出し/比較の既定の場所=マツダの著作物)
+/rom_data/
 # 配布zip(全部入り=ROM/SBL/defs を含む)とその展開コピー=絶対に公開しない
 *.zip
 /NCEC_ROM_Tool_v*/
 # 引き継ぎ資料(VIN・作業パス等の個人情報を含む=公開しない)
 docs/PROJECT_HANDOFF_ja.md
+/CLAUDE.md
 # サードパーティ製マニュアル(ルネサス等の著作物)
 docs/sh7058_plain_manual.pdf
 REN_*.pdf
@@ -32,6 +35,11 @@ defs/*.xml
 /map_editor_manual.pdf
 /map_editor_manual_EN.pdf
 
+# ROM の値(マツダの較正データ)を含む生成物＝公開しない(ローカルで tools/gen_manual.py 等から作る)
+docs/map_editor_manual.pdf
+docs/map_editor_manual_EN.pdf
+docs/ecu_diff_report.html
+
 # === ログ・キャプチャ・個人設定 ===
 logs/
 *.raw
@@ -39,6 +47,11 @@ candump*.raw
 dashboard_layout.json
 live_intervals.json
 ram_reads.json
+ui_settings.json
+# 実車デバッグの生データ/作業用ステート(配布しない)
+ram_free_state.json
+/tools/cut.txt
+/tools/ret.txt
 
 # === 生成物(任意。配布したければ除外から外す) ===
 docs/_manual_img/

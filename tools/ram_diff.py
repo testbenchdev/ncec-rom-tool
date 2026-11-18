@@ -4,18 +4,20 @@ Mode23(ReadMemoryByAddress)で指定RAM範囲を読み、**複数回トグルの
 ★ 前提: ECU側に Mode23 有効化パッチが当たっていること(既定セッションで `23` が通ること)。
 
 使い方(端末で対話的に実行):
-  python -X utf8 tools/ram_diff.py                           # 既定 0xFFFF0000-0xFFFFE000(RAM全域)
+  python -X utf8 tools/ram_diff.py                           # 既定 0xFFFF0000-0xFFFFE000(RAM全域) クラッチ
+  python -X utf8 tools/ram_diff.py --label ブレーキ          # ブレーキSW特定(踏む/離す)
   python -X utf8 tools/ram_diff.py --start FFFF6000 --end FFFFA000
   python -X utf8 tools/ram_diff.py --chunk 200               # 1回の読み出しサイズ(hex)
 
-手順:
-  1) クラッチを【離して】Enter            → 基準OFF
+手順(--label で対象スイッチ名を差し替え可。既定=クラッチ):
+  1) 対象を【離して】Enter                → 基準OFF
   2) 以降くり返し: 【踏んで】Enter → 【離して】Enter
      毎サイクル、「OFFで同じ値・ONで同じ値」に“連動し続けた”バイトだけが残る。
-  3) 数サイクル回すと、ノイズが落ちて **クラッチ連動バイトだけ**に収束する。'q'+Enterで終了。
+  3) 数サイクル回すと、ノイズが落ちて **対象連動バイトだけ**に収束する。'q'+Enterで終了。
 
 コツ: **イグニッションON・エンジンOFF(KOEO)** が最適。RAMが静止するので読みも比較もぶれない。
-      KOEOで0件なら、アイドル・ニュートラルで(ギア/アクセルは動かさず)数サイクル回す。
+      KOEOで0件なら、アイドル・ニュートラルで(他は動かさず)数サイクル回す。
+      ブレーキは必ず踏み切る(半踏みはノイズ源)。1度に踏む/離すは1アクションだけ。
 """
 import argparse
 import pathlib
@@ -75,12 +77,15 @@ def main():
     ap.add_argument("--start", default="FFFF0000")
     ap.add_argument("--end", default="FFFFE000")
     ap.add_argument("--chunk", default="200")
+    ap.add_argument("--label", default="クラッチ",
+                    help="対象スイッチ名(プロンプト表示用)。例: ブレーキ")
     args = ap.parse_args()
+    lbl = args.label
     start, end = int(args.start, 16), int(args.end, 16)
     chunk = max(1, min(mode23.MAX_SIZE, int(args.chunk, 16)))
-    print(f"RAM差分ツール(共通集合方式)  範囲 0x{start:08X}-0x{end:08X}  chunk=0x{chunk:X}")
+    print(f"RAM差分ツール(共通集合方式)  対象={lbl}  範囲 0x{start:08X}-0x{end:08X}  chunk=0x{chunk:X}")
     print("※ Mode23有効化ROM・CAN接続・イグニッションON が前提。読み取り専用。")
-    print("※ 可能なら【エンジンOFF(KOEO)】で。クラッチ以外は動かさないこと。\n")
+    print(f"※ 可能なら【エンジンOFF(KOEO)】で。{lbl}以外は動かさないこと。\n")
 
     bus = open_bus()
     diag = DiagClient(IsoTp(bus))
@@ -90,16 +95,16 @@ def main():
             print("!! この範囲を Mode23 で読めません。Mode23有効化・配線・IG ONを確認してください。")
             return
 
-        input("クラッチを【離した】状態にして Enter (基準OFF) ... ")
+        input(f"{lbl}を【離した】状態にして Enter (基準OFF) ... ")
         off = snapshot(diag, start, end, chunk, "基準OFF")
         cand = None          # {addr: (off_val, on_val)}
         cycle = 0
         while True:
-            s = input("\nクラッチを【踏んで】 Enter  / 'q'で終了 ... ")
+            s = input(f"\n{lbl}を【踏んで】 Enter  / 'q'で終了 ... ")
             if s.strip().lower() == "q":
                 break
             on = snapshot(diag, start, end, chunk, "ON")
-            s = input("クラッチを【離して】 Enter  / 'q'で終了 ... ")
+            s = input(f"{lbl}を【離して】 Enter  / 'q'で終了 ... ")
             if s.strip().lower() == "q":
                 break
             off2 = snapshot(diag, start, end, chunk, "OFF")
@@ -115,7 +120,7 @@ def main():
             print(f"--- サイクル {cycle} ---")
             show(cand)
             if cand is not None and 0 < len(cand) <= 5 and cycle >= 2:
-                print("  （収束しました。これが本物のクラッチ連動バイトの最有力です）")
+                print(f"  （収束しました。これが本物の{lbl}連動バイトの最有力です）")
             off = off2
         print("\n=== 最終候補 ===")
         if cand:
@@ -123,7 +128,7 @@ def main():
                 print(f"  0x{k:08X}: OFF=0x{cand[k][0]:02X} / ON=0x{cand[k][1]:02X}")
         else:
             print("  連動バイトなし。KOEOなら→アイドル・ニュートラルで再試行。")
-            print("  それでも0なら、PCMがクラッチを直接読んでいない可能性大。")
+            print(f"  それでも0なら、PCMが{lbl}を直接読んでいない可能性大。")
     finally:
         close_bus(bus)
 

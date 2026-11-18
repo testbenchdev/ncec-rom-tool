@@ -1,9 +1,13 @@
 """ECU内部ディスクリプタから要注意テーブルの真次元を取得し、検証して
 ncecu/_corrections_data.py を生成する。
 
-ディスクリプタ形式: [Y_axis_ptr, X_axis_ptr, data_ptr, 0x00000000, (rows<<16 | cols)]
-(各 ptr は 0x2000..0x100000 の ROM アドレス、rows/cols は 1..64)
+ディスクリプタ形式(3D・20バイト): [u16 X点数, u16 Y点数, X_axis_ptr, Y_axis_ptr, data_ptr, 0x00000000]
+(各 ptr は 0x2000..0x100000 の ROM アドレス、点数は 1..64。ROM 上の並びは [X軸][Y軸][データ])
 採用条件: (rows,cols) または (cols,rows) で読んだ値の in-range>=0.85 かつ元より改善。
+
+2026-11-16 訂正: 以前は [Y_ptr, X_ptr, data_ptr, 0, (rows<<16|cols)] と読んでいたが、これは枠が
+4バイトずれており、末尾の (rows, cols) は「次の表」の点数だった(隣どうしの寸法が同じ表では結果が
+たまたま合っていた)。点数は自分のエントリの先頭にある。
 """
 import math
 import pathlib
@@ -11,11 +15,15 @@ import struct
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
-from ncecu import defs
+from ncecu import corrections, defs
 from ncecu.rom import Rom
 
+# 既存の補正を外した状態で判定する。Rom は生成時に寸法を使って軸を丸めるので、Rom を作る前に外す
+# (外さないと前回の生成結果に左右され、実行するたびに結果が変わる)。
+corrections.CORRECTIONS.clear()
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-data = (ROOT / "ncec_rom_dump.bin").read_bytes()
+data = (ROOT / "rom_data" / "ecu_readout_yahooauction.bin").read_bytes()
 rd = defs.parse(ROOT / "defs" / "lfg7eg.xml")
 rom = Rom(data, rd)
 N = len(data)
@@ -37,14 +45,14 @@ def isnan(v):
 def scan_descriptors():
     descr = {}
     for o in range(0, N - 20, 4):
-        if w32(o + 12) != 0:
+        if w32(o + 16) != 0:
             continue
-        y, x, d = w32(o), w32(o + 4), w32(o + 8)
+        nx, ny = w16(o), w16(o + 2)
+        x, y, d = w32(o + 4), w32(o + 8), w32(o + 12)
         if not all(0x2000 <= p < 0x100000 for p in (y, x, d)):
             continue
-        a, b = w16(o + 16), w16(o + 18)
-        if 1 <= a <= 64 and 1 <= b <= 64:
-            descr[d] = (a, b)
+        if 1 <= nx <= 64 and 1 <= ny <= 64:
+            descr[d] = (ny, nx)          # (rows, cols) = (Y点数, X点数)
     return descr
 
 

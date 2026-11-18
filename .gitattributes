@@ -1,0 +1,7 @@
+# WSL/Linux で実行するシェルスクリプトは必ず LF(CRLF だと #!/bin/sh が壊れる)。
+*.sh text eol=lf
+tools/ncec-can0-up text eol=lf
+
+# Windows のバッチ/PowerShell は CRLF。
+*.bat text eol=crlf
+*.ps1 text eol=crlf

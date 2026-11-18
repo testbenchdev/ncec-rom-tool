@@ -4,7 +4,7 @@ import sys
 
 import capstone
 
-ROM = pathlib.Path(__file__).resolve().parents[1] / "ncec_rom_dump.bin"
+ROM = pathlib.Path(__file__).resolve().parents[1] / "rom_data" / "ecu_readout_yahooauction.bin"
 
 
 def get_md():

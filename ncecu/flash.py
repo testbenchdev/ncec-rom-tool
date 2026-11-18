@@ -23,6 +23,9 @@ candump から抽出可能)。
 """
 from __future__ import annotations
 
+import contextlib
+import ctypes
+import sys
 import time
 import zlib
 from dataclasses import dataclass
@@ -31,6 +34,65 @@ from . import checksum
 from .diag import DiagClient, NegativeResponse
 from .isotp import IsoTpError
 from .security import compute_security_key
+
+
+@contextlib.contextmanager
+def realtime_guard(log=None):
+    """フラッシュ/読み出し中だけ、プロセスがバックグラウンドへ回っても CANフレームの
+    タイミングが崩れないようにする(Windows)。
+
+    背景: GUI/端末の書き込みウィンドウが非フォアグラウンドになると、Windows はそのプロセスの
+    (1) システムタイマ分解能を既定 ~15.6ms へ戻し(= time.sleep(1ms) が最大15倍に伸びる)、
+    (2) EcoQoS/効率モードで CPU とスケジューリングを絞る。すると gs_usb(candleLight) の
+    USB バルク I/O が間に合わず送信FIFOが溢れ、bus.send がリトライ超過で失敗 → ISO-TP が
+    中断し、書き込みが途中で落ちる(=「背景化すると高確率で失敗」の正体)。
+
+    対策(いずれも短時間・終了時に必ず元へ戻す。非Windows/失敗時は no-op):
+      ・winmm.timeBeginPeriod(1)         … タイマ分解能を1msへ固定(sleep精度と起床遅延を維持)
+      ・SetPriorityClass(HIGH)            … プロセスを高優先度にして背景スロットリングを回避
+      ・SetThreadExecutionState(SYSTEM)   … 転送中のシステムスリープを抑止
+    """
+    if sys.platform != "win32":
+        yield
+        return
+    ES_CONTINUOUS = 0x80000000
+    ES_SYSTEM_REQUIRED = 0x00000001
+    HIGH_PRIORITY_CLASS = 0x00000080
+    NORMAL_PRIORITY_CLASS = 0x00000020
+    winmm = kernel32 = None
+    raised = False
+    try:
+        winmm = ctypes.WinDLL("winmm")
+        winmm.timeBeginPeriod(1)
+    except Exception:  # noqa: BLE001
+        winmm = None
+    try:
+        kernel32 = ctypes.WinDLL("kernel32")
+        kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+        if kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), HIGH_PRIORITY_CLASS):
+            raised = True
+    except Exception:  # noqa: BLE001
+        kernel32 = None
+    if log:
+        log("  [realtime] タイマ1ms＋高優先度＋スリープ抑止 ON(背景化でも転送を維持)")
+    try:
+        yield
+    finally:
+        try:
+            if raised and kernel32:
+                kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), NORMAL_PRIORITY_CLASS)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            if kernel32:
+                kernel32.SetThreadExecutionState(ES_CONTINUOUS)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            if winmm:
+                winmm.timeEndPeriod(1)
+        except Exception:  # noqa: BLE001
+            pass
 
 # --- ROM / フラッシュ パラメータ(nc-flash constants.py と一致・実機確認済み)---
 ROM_SIZE = 0x100000
@@ -173,11 +235,13 @@ class Flasher:
                          timeout=10.0)
 
     def transfer_data(self, data: bytes, label: str, progress=None,
-                      block: int = BLOCK_SIZE) -> None:
+                      block: int = BLOCK_SIZE) -> float:
+        """0x36 で block 単位転送。所要秒を返す(速度計測用)。"""
         total = len(data)
         sent = 0
         nblk = 0
         self.log(f"TransferData ({label}): {total} bytes, {block}B/block")
+        t0 = time.monotonic()
         while sent < total:
             chunk = data[sent:sent + block]
             self._req(bytes([0x36]) + chunk, timeout=10.0)
@@ -187,6 +251,11 @@ class Flasher:
                 progress(sent, total)
             elif nblk % 64 == 0 or sent >= total:   # 進捗を時々ログ(無反応に見せない=中断防止)
                 self.log(f"  ... {label} {sent}/{total} ({100 * sent // total}%)")
+        dt = time.monotonic() - t0
+        if dt > 0 and nblk:
+            self.log(f"  [速度] {label}: {dt:.1f}s  {total / dt / 1024:.2f}KiB/s  "
+                     f"{dt / nblk * 1000:.1f}ms/ブロック({nblk})")
+        return dt
 
     def transfer_exit(self) -> None:
         self.log("TransferExit 37 ...")
@@ -224,12 +293,13 @@ class Flasher:
         buf = bytearray(ROM_SIZE)
         off = 0
         t0 = time.monotonic()
-        while off < ROM_SIZE:
-            n = min(block, ROM_SIZE - off)
-            buf[off:off + n] = self.read_memory(off, n)
-            off += n
-            if progress:
-                progress(off, ROM_SIZE)
+        with realtime_guard(self.log):   # 背景化してもMode23の取りこぼし/中断を防ぐ
+            while off < ROM_SIZE:
+                n = min(block, ROM_SIZE - off)
+                buf[off:off + n] = self.read_memory(off, n)
+                off += n
+                if progress:
+                    progress(off, ROM_SIZE)
         self.log(f"読み出し完了 0x{ROM_SIZE:X} ({time.monotonic() - t0:.1f}s)")
         if restore_session:
             try:
@@ -248,11 +318,16 @@ class Flasher:
     # ---- 本体 ----
     def flash(self, rom_data: bytes, sbl_data: bytes | None,
               flash_start: int = ROM_FLASH_START_MIN,
-              confirm: bool = False) -> FlashPlan:
+              confirm: bool = False, tx_st_min_floor: float | None = None) -> FlashPlan:
         """フラッシュ実行(nc-flash 準拠)。sbl_data が None か confirm=False ならドライラン。
 
         手順: 認証 → B1 00 B2 00 → RequestDownload(0x8000, 0xFF800)
               → TransferData[ SBL + 補正ROM[flash_start:] ] 0x400ブロック → TransferExit → リセット。
+
+        tx_st_min_floor: 連続フレーム送信の最小間隔[秒]を一時上書き(None=既定0.001のまま)。
+            小さくすると転送が速くなるが、gs_usb(candleLight)の送信FIFO溢れ(Errno10060)の
+            恐れがある。realtime_guard でタイマが1ms固定になるため背景でも値どおりに効く。
+            予備ECUで readback 照合しながら詰めること(例 0.0005)。
         """
         corrected, ncorr = prepare_image(rom_data)
         generation = detect_generation(corrected)
@@ -297,16 +372,35 @@ class Flasher:
                 "NC1 以外の ROM/SBL での書き込みは中止します。")
 
         # ---- 実書き込み(消去を伴う不可逆操作)----
-        self.authenticate()
-        self.check_flash_counter()
-        self.request_download(DOWNLOAD_ADDR, DOWNLOAD_SIZE)
-        t0 = time.monotonic()
-        self.transfer_data(sbl_data, "SBL")
-        self.transfer_data(
-            program, "ROM program",
-            progress=lambda s, t: self.log(f"  ROM {s}/{t}")
-            if s % (BLOCK_SIZE * 32) == 0 else None)
-        self.transfer_exit()
-        self.ecu_reset()
-        self.log(f"完了 ({time.monotonic() - t0:.1f}s)")
+        tp = getattr(self.diag, "tp", None)
+        prev_floor = getattr(tp, "tx_st_min_floor", None) if tp is not None else None
+        if tx_st_min_floor is not None and tp is not None:
+            tp.tx_st_min_floor = float(tx_st_min_floor)
+            self.log(f"  [転送] STmin下限={tx_st_min_floor*1000:.2f}ms(既定1.00ms。速いほど短時間/FIFO溢れ注意)")
+        # realtime_guard: 背景化(タイマ鈍化/EcoQoS)でも転送タイミングを維持し、途中失敗を防ぐ。
+        with realtime_guard(self.log):
+            try:
+                tA = time.monotonic()
+                self.authenticate()
+                self.check_flash_counter()
+                self.request_download(DOWNLOAD_ADDR, DOWNLOAD_SIZE)
+                t_prep = time.monotonic() - tA
+                t0 = time.monotonic()
+                dt_sbl = self.transfer_data(sbl_data, "SBL")
+                dt_rom = self.transfer_data(
+                    program, "ROM program",
+                    progress=lambda s, t: self.log(f"  ROM {s}/{t}")
+                    if s % (BLOCK_SIZE * 32) == 0 else None)
+                tE = time.monotonic()
+                self.transfer_exit()
+                self.ecu_reset()
+                total_s = time.monotonic() - t0
+                # 速度内訳(ボトルネック可視化): 準備/転送(SBL+ROM)/Exit+Reset。
+                #   転送律速(KiB/s低・ms/ブロック大)なら tx_st_min_floor を下げる余地。
+                #   1ブロック=0x400を送る時間(≒146連続フレーム)＋ECUのフラッシュ書込待ちの合算。
+                self.log(f"完了 ({total_s:.1f}s)  内訳: 準備{t_prep:.1f}s / "
+                         f"SBL転送{dt_sbl:.1f}s / ROM転送{dt_rom:.1f}s / Exit+Reset{time.monotonic() - tE:.1f}s")
+            finally:
+                if prev_floor is not None and tp is not None:
+                    tp.tx_st_min_floor = prev_floor
         return plan

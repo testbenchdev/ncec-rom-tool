@@ -50,7 +50,7 @@ def L(ja, en):
     return en if LANG == "en" else ja
 
 
-ROM_PATH = ROOT / "ncec_rom_dump.bin"
+ROM_PATH = ROOT / "rom_data" / "ecu_readout_yahooauction.bin"
 MAIN_JSON = ROOT / "defs" / "libretuner" / "main.json"
 CALID_JSON = ROOT / "defs" / "libretuner" / "LFG7EG.json"
 OUT_PDF = ROOT / "docs" / ("map_editor_manual_EN.pdf" if LANG == "en"
@@ -601,14 +601,17 @@ def build():
            size=10, color=d.sub)
     d.spacer(14)
     d.para(L("⚠ 安全上の注意", "⚠ Safety notice"), size=12, color=d.warn, gap=4)
-    for b in [L("作業は予備(ベンチ)ECUで行う前提。車両搭載ECUへの書き込みは行わないこと。",
-                "Work on a spare (bench) ECU. Do not write to the ECU installed in a vehicle."),
+    for b in [L("予備/ベンチECUでの作業を強く推奨。元の吸い出しROMは必ず保管し、書き込み中は電源を切らないこと。",
+                "Strongly prefer a spare / bench ECU. Keep your original read-out ROM, and never cut "
+                "power while flashing."),
               L("点火時期・空燃比・リミッタの変更はエンジン破損の危険があります。意味が分からない項目は変更しない。",
                 "Changing ignition timing, AFR or limiters can destroy the engine. Do not change "
                 "anything you do not understand."),
-              L("編集後の保存ではチェックサムを自動補正します。実機書き込みは別途SBLが必要です(後述)。",
+              L("編集後の保存ではチェックサムを自動補正します。実機書き込みにはNC1用SBLが別途必要です"
+                "(本ツールは配布せず利用者が用意。手順と失敗時の復旧は後述)。",
                 "Checksums are corrected automatically on save. Flashing the real ECU additionally "
-                "requires an SBL (see below).")]:
+                "requires an NC1 SBL (not distributed with this tool — you supply it; the procedure "
+                "and failure recovery are described below).")]:
         d.bullet(b, size=10)
 
     # ---- §1 概要 ----
@@ -636,11 +639,12 @@ def build():
                 "ECU read-out (Mode 23), ECU-vs-ROM compare, and ROM-vs-ROM compare.")]:
         d.bullet(b)
     d.h2(L("現在の制約", "Current limitations"))
-    for b in [L("実機への『書き込み(フラッシュ)』には SBL(セカンダリブートローダ)が必要で、"
-                "入手待ち。認証・手順・チェックサム等の他要素は実装・検証済みで、SBL を入れれば書込可能。",
-                "'Flashing' the real ECU requires an SBL (Secondary Boot Loader), which is still "
-                "being sourced. Authentication, the sequence, checksums and the rest are already "
-                "implemented and verified; the tool can flash once an SBL is supplied."),
+    for b in [L("実機への『書き込み(フラッシュ)』は実装・実機検証済み(予備ECU単体でも車両のOBD2ポート経由でも"
+                "成功)。ただしNC1用SBL(0x1800バイト)は本ツールに含まれないため、利用者が用意する必要があります"
+                "(唯一の外部入力)。",
+                "'Flashing' the real ECU is implemented and hardware-verified (succeeds both on a "
+                "spare ECU and via the car's OBD2 port). Only the NC1 SBL (0x1800 bytes) is not "
+                "included and must be supplied by the user (the one external input)."),
               L("ベンチ(エンジン停止)ではライブの運転点が静止するため、セル追従は左下に固定されます"
                 "(実走・信号注入時に動きます)。",
                 "On a bench (engine off) the live operating point is static, so active-cell "
@@ -652,8 +656,10 @@ def build():
     d._start_page()
     d.h1(L("2. ソフトウェアの使用方法", "2. Using the Software"))
     d.h2(L("画面構成", "Screen layout"))
-    for b in [L("左: カテゴリ別ツリー(日本語)。検索欄で名称/カテゴリを絞り込み。",
-                "Left: the category tree (localized). The search box filters by name / category."),
+    for b in [L("左: カテゴリ別ツリー(日本語)。検索欄で名称/カテゴリを絞り込み。0x で始めると番地で検索"
+                "(例 0xD6CDC。表の途中の番地や軸の番地でも見つかる)。",
+                "Left: the category tree (localized). The search box filters by name / category; a query "
+                "starting with 0x searches by address (e.g. 0xD6CDC; mid-table and axis addresses match too)."),
               L("右上: 選択マップの情報(アドレス・次元・単位・型)と解説パネル。",
                 "Top-right: info on the selected map (address, dimensions, unit, type) and a notes "
                 "panel."),
@@ -670,7 +676,8 @@ def build():
         (L("保存 / 名前を付けて保存", "Save / Save As"),
          L("チェックサムを自動補正して書き出し。", "Write out with the checksum corrected automatically.")),
         (L("ヘルプ", "Help"),
-         L("簡易ヘルプ(docs/editor_help_ja.md)。", "Quick help (docs/editor_help_ja.md).")),
+         L("簡易ヘルプ。統合マニュアル(docs/map_analysis_JA.html)もここから開けます。",
+           "Quick help; it also opens the full manual (docs/map_analysis.html).")),
         (L("Live ▶/■", "Live ▶/■"),
          L("実機OBDに接続しライブ表示開始/停止。現在運転点のセルを赤枠表示。",
            "Connect to the real ECU over OBD and start/stop live view. The current operating "
@@ -711,14 +718,41 @@ def build():
                 "Doing this from a vehicle's OBD-II port requires GND (4/5) in addition to CAN-H "
                 "(6) / CAN-L (14).")]:
         d.bullet(b)
-    d.h2(L("書き込み(フラッシュ)の現状", "Flashing: current status"))
+    d.h2(L("書き込み(フラッシュ)", "Flashing"))
     d.para(L("認証→RoutineControl→RequestDownload(0x8000/0xFF800)→SBL+本体転送(0x400ブロック)"
-             "→TransferExit→リセット、という手順まで実装・実機で手前段階まで検証済みです。"
-             "唯一 SBL(NC1用・0x1800バイト)の入手が未了のため、実書き込みは保留中です。",
+             "→TransferExit→リセット、という手順を実装し、実機で書き込み成功を確認済みです"
+             "(予備ECU単体でも、車両のOBD2ポート経由でも成功)。NC1用SBL(0x1800バイト)だけは"
+             "本ツールに含まれないため利用者が用意します(エディタは既定で "
+             "Decryption_sbl/sbl_nc1_flash_0x2000.bin を読みます)。フル書き込みは補正後ROMの "
+             "0x2000 以降を書き込みます(先頭8KB=0x0000〜0x1FFFは保護)。",
              "The full sequence — authentication -> RoutineControl -> RequestDownload "
              "(0x8000/0xFF800) -> SBL + main transfer (0x400 blocks) -> TransferExit -> reset — is "
-             "implemented and verified on the real ECU up to the step before writing. Only the SBL "
-             "(for NC1, 0x1800 bytes) is still missing, so actual writing is on hold."), color=d.ink)
+             "implemented and has flashed the real ECU successfully (both on a bench ECU and via the "
+             "car's OBD2 port). Only the NC1 SBL (0x1800 bytes) is not included and must be supplied "
+             "by the user (the editor reads Decryption_sbl/sbl_nc1_flash_0x2000.bin by default). A "
+             "full flash writes the corrected ROM from 0x2000 onward (the first 8 KB, 0x0000-0x1FFF, "
+             "is protected)."), color=d.ink)
+    d.h2(L("書き込みに失敗したら(復旧)", "If a flash fails (recovery)"))
+    for b in [L("フル書き込みは先頭8KB(0x0000〜0x1FFF)を消去も書き込みもしません。ここにリセットベクタと、"
+                "CAN経由の再書き込みを受け付ける常駐ハンドラが入っています。",
+                "A full flash never erases or writes the first 8 KB (0x0000-0x1FFF). That region holds "
+                "the reset vector and the resident handlers that accept a re-flash over CAN."),
+              L("そのため本体(0x2000以降)が転送途中で壊れても、低位ブートが生き残ってCANに応答します。"
+                "電源を入れ直して同じ手順でもう一度書き込めば復旧します(車両搭載のままOBD2からでも可)。",
+                "So even if the body (0x2000 onward) is corrupted mid-transfer, the low bootstrap "
+                "survives and answers on CAN. Power-cycle and flash again with the same procedure to "
+                "recover (including from the car's OBD2 port while installed)."),
+              L("最悪ケースは『恒久的な文鎮化』ではなく『書き直すまで始動しない』です。復旧のため、"
+                "既知の正常なフルイメージ(吸い出しROM)を必ず手元に残し、書き込み中は電源を安定させてください。",
+                "The worst case is not a permanent brick but 'it will not start until re-flashed'. "
+                "Keep a known-good full image (your read-out ROM) on hand and keep power stable during "
+                "a write."),
+              L("ただしBDM/JTAGによる低位復旧手段はありません。万一先頭8KBが壊れた場合や、消去直後の"
+                "最悪タイミングで電源断になった場合は、復旧できない可能性があります。",
+                "There is no BDM/JTAG low-level recovery, however. If the first 8 KB is somehow "
+                "damaged, or power is lost at the worst instant just after an erase, recovery may not "
+                "be possible.")]:
+        d.bullet(b, size=10)
 
     # ---- §3 各マップ詳細 ----
     d._start_page()

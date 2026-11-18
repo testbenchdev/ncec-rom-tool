@@ -154,7 +154,7 @@ def build():
            "『そのまま使える説明文』をまとめたものです。付属ファイル README.md / .gitignore / "
            "requirements.txt は作成済みで、そのままコミットできます。", color=d.ink)
     d.spacer(8)
-    d.para("⚠ 最重要: マツダのROM(ncec_rom_dump.bin)やルネサスのマニュアルPDF等の"
+    d.para("⚠ 最重要: マツダのROM(rom_data/ の *.bin)やルネサスのマニュアルPDF等の"
            "第三者著作物は絶対に公開しないこと(.gitignore で除外済み)。", color=d.warn)
 
     # 1. 公開前チェック
@@ -162,7 +162,7 @@ def build():
     d.h1("1. 公開前チェック(著作権で“含めない”もの)")
     d.para("オープンソース公開で最も重要なのは、他者の著作物を混ぜないことです。以下は"
            "リポジトリに含めないでください(付属 .gitignore で自動除外されます)。")
-    d.bullet("ECU ファームウェア/ROMイメージ(*.bin、ncec_rom_dump.bin)= マツダの著作物。",
+    d.bullet("ECU ファームウェア/ROMイメージ(*.bin、rom_data/)= マツダの著作物。",
              color=d.ink)
     d.bullet("SBL / 非公開IP(入手できても公開しない)。", color=d.ink)
     d.bullet("Renesas SH7058 マニュアル(docs/sh7058_plain_manual.pdf、REN_*.pdf)= ルネサスの著作物。")
@@ -172,7 +172,7 @@ def build():
     d.para("コミット前に必ず確認:", color=d.ink)
     d.code("cd C:\\Users\\user\\Downloads\\NECEECU\n"
            "git status            # 一覧に .bin / 各種PDF(Renesas) が無いことを確認\n"
-           "git check-ignore ncec_rom_dump.bin   # 除外されていれば行が返る")
+           "git check-ignore rom_data/ecu_readout_yahooauction.bin   # 除外されていれば行が返る")
     d.para("※ マップ定義(defs/libretuner/*.json)は LibreTuner/speepsio 氏の著作物(GPL)。"
            "同梱する場合はクレジットとGPL表記が必要です。迷う場合は同梱せず、README の手順で"
            "利用者にダウンロードしてもらう方式が安全です(付属 README はこの方式)。", color=d.sub)
@@ -181,11 +181,12 @@ def build():
     d.h1("2. 公開する中身(推奨構成)")
     d.para("公開するのは“自分が書いたコードと文書”です:")
     d.code("ncec_editor.py  ncec_dashboard.py      # GUI\n"
-           "ncecu/*.py                              # ライブラリ(flash, rom, i18n, livelog, ...)\n"
+           "ncec_tableview.py  ncec_shortcuts.py  ncec_uistate.py  ncec_popup.py  ncec_chart.py  # GUI(表/キー/画面の状態/WSL用メニュー/チャート)\n"
+           "ncecu/*.py                             # ライブラリ(flash, rom, i18n, livelog, ...)\n"
            "tools/*.py                              # 吸い出し/比較/取説生成 等\n"
            "docs/*.md                               # ドキュメント(自作)\n"
            "README.md  LICENSE  .gitignore  requirements.txt")
-    d.para("defs/libretuner/ は上記の著作権方針に従って判断。生成PDF(取説)は任意で同梱可"
+    d.para("defs/libretuner/ は上記の著作権方針に従って判断。生成PDF(取説)と差分レポートは ROM の値を含むので同梱しない"
            "(自分のROM値を含むので、気になる場合は外す)。", color=d.sub)
 
     # 3. ライセンス

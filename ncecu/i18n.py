@@ -5,6 +5,8 @@ translate_category() は前後空白を無視して引く。未登録はその�
 言語は set_language("ja"/"en") で切替。英語モードは定義の原文(英語)を返す。
 """
 
+from . import ectcount
+
 _LANG = "ja"
 
 
@@ -354,7 +356,7 @@ CATEGORY_JA_LT = {
     "Intake Manifold Runner Control (AT Only)": "可変吸気ランナー制御 IMRC(AT限定)",
     "Intake Manifold Tuning Valve": "可変吸気バルブ(IMTV)",
     "Patch - Decel Fuel Cutoff": "パッチ - 減速燃料カットの無効化",
-    "Patch - Flat Shift Ignition Retard": "パッチ - フラットシフト（点火リタード）",
+    "Patch - Flat Shift": "パッチ - フラットシフト",
     "Patch - Engine Displacement": "パッチ - 排気量設定",
     "Patch - Immobilizer Disable": "パッチ - イモビライザー無効化",
     "Patch - Open Loop Short Term Fuel Trim Fix": "パッチ - 開ループ短期補正の修正",
@@ -395,6 +397,7 @@ CATEGORY_JA_LT = {
     "WIP - Alternator": "作業中(WIP) - オルタネータ",
     "WIP - Torque Model Bank (RE)": "トルクモデル(RE・N·m確認済)",
     "WIP - DBW Torque Coordinator (RE)": "DBWトルク協調(RE)",
+    "WIP - Fuel Comp Cut Pattern (RE)": "燃料補正 - カットパターン増量(RE)",
     "Warm-Up Fuel Target OL - Base": "目標空燃比(開ループ) - 暖機時ベース",
 }
 
@@ -416,7 +419,11 @@ def translate_category(en: str) -> str:
 # ---- テーブル名(ツリー小項目)の用語訳。カテゴリ用語+名称固有の語を最長一致で置換 ----
 _NAME_EXTRA = {
     # フラットシフト関連の追加項目(ncecu/flatshift.py)
-    "Flat Shift Retard": "フラットシフト点火リタード", "Retard Amount": "リタード量",
+    "Flat Shift": "フラットシフト", "Retard Amount": "遅角量",
+    "Method (0 Retard / 1 Cut)": "方式(0遅角/1カット)",
+    "Min Advance Floor": "下限(最小進角)", "Debug Test Mode (0 off / 1 clutch-only)": "デバッグ テストモード(0/1クラッチのみ)",
+    "Cut Floor": "カット下限",
+    "APP Threshold": "アクセルしきい値", "RPM Threshold": "回転しきい値",
     "Vehicle Speed Minimum": "車速下限", "Vehicle Speed": "車速", "Throttle Cut": "スロットルカット",
     # 条件・状態(句を優先)
     "4th, 5th, 6th Gear": "4/5/6速", "First Gear": "1速", "1st Gear": "1速",
@@ -428,6 +435,9 @@ _NAME_EXTRA = {
     "Timer Active": "タイマ作動中", "Timer Expired": "タイマ満了",
     "Start-Up": "始動時", "Startup": "始動時", "From Stop": "発進時", "High Speed": "高速",
     "Anti Lug": "アンチラグ", "No Activity": "無反応", "Catalyst Temp": "触媒温度",
+    "Shuffle Filter Coefficient": "しゃくり振動フィルタ係数", "Torque Request Anti-Jerk": "トルク要求の振動抑制",
+    "Band-Pass Coefficient": "帯域フィルタ係数", "Gear x Tip-In Stage": "ギア×踏み込み段階", "Gain": "ゲイン",
+    "Cut Pattern Enrichment": "カットパターン増量",
     "Power Enleanment": "高負荷リーン化", "Radiant Intake Heat": "吸気輻射熱",
     "Idle Speed": "アイドル回転", "Idle Load": "アイドル負荷",
     "High Fuel Request": "高燃料要求", "Low Fuel Request": "低燃料要求", "Fuel Request": "燃料要求",
@@ -530,10 +540,10 @@ CATEGORY_DESC = {
     "DBW - Throttle Duty Limits": "スロットルデューティの上下限。保護・上限設定。",
     "DTC - Activation Flags": "各ダイアグコード(DTC)の有効/無効フラグ。診断の有効化設定。",
     "DTC - Activation Thresholds": "DTCを立てるしきい値。誤検知・不要なチェックランプの調整に関係。",
-    "Emission System - EGR": "EGR(排気再循環)制御。NA実用では無効化/調整対象になることがある。",
+    "Emission System - EGR": "EGR(排気再循環)制御。排ガス関連のため本ツールでは変更の対象外(参照用)。",
     "Emission System - EVAP": "EVAP(燃料蒸発ガス)制御。パージ等。",
     "Engine Displacement": "排気量など基本定数。燃料計算の基礎。通常は変更不要。",
-    "Engine Fan Control": "電動ファンのON/OFF水温しきい値。冷却の調整に使う。",
+    "Engine Fan Control": "電動ファンの作動条件(水温・車速・A/C・アフタークーリング)。水温しきい値は℃ではなく水温センサ電圧のA/D値(値が大きいほど低い水温)。",
     "Engine Limiters - RPM": "レブリミット(回転数上限)。燃料カット/点火カットの回転数。",
     "Engine Limiters - VSS": "車速(VSS)に基づくリミッタ。速度リミッター等。",
     "Engine Load - Limits": "エンジン負荷の上限・保護。",
@@ -588,6 +598,15 @@ CATEGORY_DESC = {
     "Spark Correction - Cold Advance": "冷間時の進角補正。暖機性能。",
     "Spark Correction - EGR Advance": "EGR作動時の進角補正。",
     "Spark Correction - Knock Retard": "ノック検出時の遅角(リタード)量。ノック保護の効き方。",
+    "Spark Base / Idle Transition": "アイドル用の点火とベース点火(走行用)を切り替える条件。回転数しきい値など。",
+    "Spark Base - High Fuel Request Transition": "点火マップ『高燃料要求時 / 低燃料要求時』を切り替える境界。燃料要求(ストイキに対する増量%)がしきい値を超えると高燃料要求側を使う。進角値そのものではない。",
+    "Spark Idle Limit Correction - AC Cycle Transition": "A/C コンプレッサが切れた直後に、アイドル点火へ一時的に加える補正(量と継続カウント)。",
+    "Spark Idle Limit Correction - Idle Error": "アイドル回転の偏差(実回転−目標)に応じた点火補正。アイドルの安定に使う。",
+    "Spark Idle Limit Correction - PS Cycle Transition": "パワステ負荷が入り/切りした直後に、アイドル点火へ一時的に加える補正(量と継続カウント)。",
+    "WIP - Torque Model Bank (RE)": "点火効率トルクモデルの表(逆解析)。回転×負荷の(係数k・MBT点火・トルク)が4組と、回転×水温の表が1枚。軸と寸法はECU内部の表記述子で確認済み。役割名は値と使われ方からの推定。",
+    "WIP - DBW Torque Coordinator (RE)": "電子スロットルのトルク協調まわりの表(逆解析)。アクセル→トルク要求(BMEP)→目標スロットルと、トルク要求の振動抑制(駆動系のしゃくりを帯域フィルタで取り出して差し引く)。名前に (Control) が付く表は、安全監視(Data Integrity)側に同じ値の写しがあり、変えるときは必ず両方を同じ値にする。軸と寸法はECU内部の表記述子で確認済み。",
+    "WIP - Fuel Comp Cut Pattern (RE)": "燃料の増量%の1項(RAM 0xFFFF75DC)を回転×負荷で引く表(逆解析)。CAN(ID 0x211)で届くトルク上限が要求トルクを下回り、一部の気筒の燃料を止めてトルクを下げる間だけ使う。気筒パターンの状態で3面を切り替える。",
+    "Spark Correction - Tip-In Anti Lug": "急開(踏み込み)直後の駆動系のしゃくり(前後振動)を点火遅角で抑える。ギアごとのしゃくり振動数(回転数÷車速から引く)で振動抽出フィルタの係数を選び、負荷の振動成分に応じて遅角する。",
     "Spark Correction - Launch Control Retard": "ローンチコントロール時の遅角。",
     "Spark Correction - Stumble Recovery Retard": "ストール/息つき復帰時の遅角。",
     "Spark Correction - Tip-In Retard": "加速(Tip-In)時の遅角補正。加速時ノック対策。",
@@ -597,7 +616,7 @@ CATEGORY_DESC = {
     "Variable Cam Timing - Base": "可変バルブタイミング(VCT)の目標角度マップ。トルク特性に影響。",
     "Vehicle Instrument Cluster - CEL Warning": "メーターのチェックランプ(CEL)警告表示の制御。",
     "Vehicle Instrument Cluster - ECT Gauge": "水温計の表示特性(実温度→針位置)。水温計の張り付き調整等。",
-    "Patch - Flat Shift Ignition Retard": "フラットシフト用の点火リタード・パッチ(第3ドラフト)の定数。クラッチ踏込・アクセル開度>しきい値・回転>しきい値・車速>下限がすべて成立した間だけ、最終進角からリタード量を引く(純正の最大リタードで下限制限)。パッチ適用済みROMでのみ表示。ベンチ検証用ドラフト。",
+    "Patch - Flat Shift": "フラットシフト・パッチ(第6ドラフト＝スクラッチ無し・読み取り専用)の定数。クラッチ踏込 かつ 回転>しきい値 かつ アクセル>しきい値 かつ 車速>下限 の間だけ発動(RAMに一切書かない。窓時間はクラッチを踏んでいる長さ＝回転しきい値が上限)。方式0=点火遅角(最終進角から遅角量を引く。下限まで深く=大遅角も調整可)、方式1=本物の点火カット(コイル充電ハンドラ0x19D04をケーブで差し替え、発動中は充電スキップ=火花停止)。test_mode=1は車速ゲートだけ無視(クラッチ+回転+アクセルは生かす)=停車確認用。始動/アイドルは低回転で不発(クラッチ始動を妨げない)、停車Nで回転を上げると発動。パッチ適用済みROMでのみ表示。ベンチ検証用ドラフト、点火カットの効き/コイル過熱有無は実車でのみ確認。",
     "Vehicle Instrument Cluster - Speedometer": "スピードメーターの表示特性。タイヤ外径変更時の補正等。",
 }
 
@@ -635,13 +654,13 @@ GROUP_DESC = {
     "Engine Sensors": "各センサ(水温・吸気温・エアフロ等)の特性・変換。狂うと制御全体がズレる。センサ変更時のみ。",
     "Engine Limiters": "レブリミット・速度リミッタ等の上限。",
     "Engine Load": "負荷(ロード)指標のスケーリング・上限。各マップの軸計算に影響する基礎。",
-    "Engine Fan Control": "電動ファンの作動水温しきい値。冷却の調整。",
-    "Emission System": "排出ガス関連(触媒・EGR・EVAP)。実用で調整/無効化対象になることがある。",
+    "Engine Fan Control": "電動ファンの作動条件(水温・車速・A/C・アフタークーリング)。水温しきい値は℃ではなく水温センサ電圧のA/D値(値が大きいほど低い水温)。",
+    "Emission System": "排出ガス関連(触媒温度推定・EGR・EVAP)。本ツールでは変更の対象外(参照用)。",
     "DBW": "電子スロットル(ドライブバイワイヤ)。目標開度・レスポンスに関係。",
     "Data Integrity Checks": "各制御値の整合性(フェイルセーフ)判定。安全側の保護。通常は変更しない。",
     "Data Integrity Thresholds": "整合性判定のしきい値。保護用。通常は変更しない。",
     "DTC Flags B": "ダイアグコード(DTC)の有効/無効フラグ。",
-    "DTC Thresholds": "DTCを立てるしきい値。誤検知・不要な警告灯の調整に関係。",
+    "DTC Thresholds": "DTC(故障コード)の判定しきい値。診断と保護のための値で、本ツールでは変更の対象外(参照用)。",
     "Variable Cam Timing": "可変バルブタイミング(VVT)の目標角。トルク特性に影響。",
     "Ignition Coil Dwell Time": "点火コイルの通電時間(ドウェル)。コイル変更時に関係。",
     "Gear Ratio": "各ギアのギア比(推定)。ギア判定に使用。",
@@ -673,7 +692,7 @@ EN_GROUP_DESC = {
     "Engine Sensors": "Sensor transfer functions. Adjust only when changing sensors/intake.",
     "Engine Limiters": "Rev/speed limiters.",
     "Engine Load": "Load metric scaling/limits (axis of most maps).",
-    "Engine Fan Control": "Electric fan ON/OFF coolant thresholds.",
+    "Engine Fan Control": "Electric fan control (coolant, vehicle speed, A/C, after-cooling). Coolant thresholds are ECT-sensor A/D counts, not °C (a larger value = a lower temperature).",
     "Variable Cam Timing": "VVT target angle. Affects torque curve.",
     "Ignition Coil Dwell Time": "Coil charge time. Match to coil when changed.",
     "DBW": "Electronic throttle (drive-by-wire) mapping/response.",
@@ -686,6 +705,7 @@ EN_GROUP_EFFECT = {
     "Fuel Target OL": "Rich=safe/power, lean=economy but dangerous at high load.",
     "Fuel IPW": "Higher=richer, lower=leaner. Match injector characteristics when changed.",
     "Engine Limiters": "Raises/lowers rev or speed limiter. Mind mechanical limits.",
+    "Engine Fan Control": "Coolant thresholds are A/D counts: a higher value starts the fan at a LOWER temperature (earlier), a lower value later. Speed thresholds and timers are plain values.",
     "Idle Speed": "Higher=faster idle, lower=risk of stall.",
     "Data Integrity Checks": "Raise together with the control map or the ETC monitor trips fail-safe.",
     "Patch": "ROM modification; effect varies per item. Self-responsibility.",
@@ -694,20 +714,49 @@ EN_GROUP_EFFECT = {
 
 # 英語モードのカテゴリ個別解説/効果(グループより優先)
 EN_CATEGORY_DESC = {
-    "Patch - Flat Shift Ignition Retard": (
-        "Constants of the flat-shift ignition-retard patch (draft 3). While the clutch is pressed AND "
-        "APP > threshold AND RPM > threshold AND vehicle speed > minimum, the retard amount is "
-        "subtracted from the final spark advance (floored by the stock max-retard limit). Shown only "
-        "for ROMs with the patch applied. Draft for bench validation."),
+    "Spark Base / Idle Transition": "Conditions that switch between idle spark and base (driving) spark: RPM thresholds etc.",
+    "Spark Base - High Fuel Request Transition": "Boundary that selects the high- or low-fuel-request spark maps: the high side is used when the fuel request (enrichment in % over stoich) exceeds the threshold. Not advance values.",
+    "Spark Idle Limit Correction - AC Cycle Transition": "Temporary idle-spark correction right after the A/C compressor cycles off (amount and duration count).",
+    "Spark Idle Limit Correction - Idle Error": "Spark correction vs idle-speed error (actual minus target), used to stabilise idle.",
+    "Spark Idle Limit Correction - PS Cycle Transition": "Temporary idle-spark correction right after the power-steering load cycles on/off (amount and duration count).",
+    "WIP - Torque Model Bank (RE)": "Spark-efficiency torque-model tables (reverse-engineered): four sets of (factor k, MBT spark, torque) on RPM x load plus one RPM x coolant table. Axes and dimensions verified against the ECU table descriptors; role names are inferred from values and use.",
+    "WIP - DBW Torque Coordinator (RE)": "Tables around the drive-by-wire torque coordination (reverse-engineered): pedal -> torque request (BMEP) -> target throttle, and the torque-request anti-jerk (a band-pass filter picks out the driveline shuffle and it is subtracted). Tables named (Control) have an identical monitor (Data Integrity) copy - always change both to the same values. Axes and dimensions verified against the ECU table descriptors.",
+    "WIP - Fuel Comp Cut Pattern (RE)": "RPM x load tables for one fuel-enrichment term in % (RAM 0xFFFF75DC), reverse-engineered. Used only while a torque limit received over CAN (ID 0x211) is below the requested torque and fuel is cut on some cylinders to lower the torque. The cylinder-pattern state selects one of the three tables.",
+    "Spark Correction - Tip-In Anti Lug": "Damps the driveline shuffle right after a tip-in with spark retard. The per-gear shuffle frequency (looked up from RPM / vehicle speed) selects the coefficients of a filter that picks the oscillation out of load, and the retard follows that oscillation.",
+    "Emission System - Catalyst": "Catalyst temperature estimate. Emissions-related: not a tuning target in this tool (reference only).",
+    "Emission System - EGR": "EGR control. Emissions-related: not a tuning target in this tool (reference only).",
+    "Emission System - EVAP": "EVAP purge control. Emissions-related: not a tuning target in this tool (reference only).",
+    "DTC Thresholds": "DTC decision thresholds. Diagnostic/protective values: not a tuning target in this tool (reference only).",
+    "Patch - Flat Shift": (
+        "Constants of the flat-shift patch (draft 6: scratch-free, read-only — no stable free RAM exists "
+        "on this ECU). Acts while clutch pressed AND RPM>threshold AND APP>threshold AND speed>minimum "
+        "(no RAM writes; the clutch dip is the window, RPM threshold caps it). Method 0 = ignition retard "
+        "(subtract the retard amount from final advance, down to the floor = also big retard); Method 1 = "
+        "true ignition cut (the coil-charge handler 0x19D04 is repointed to a cave that skips charging = "
+        "no spark while active). test_mode=1 ignores ONLY the speed gate (clutch+RPM+APP still required) "
+        "for a standstill check — won't fire at cranking/idle (low RPM) so starting is unaffected; rev in "
+        "neutral to trigger. Shown only for patched ROMs. Draft; the cut effect and coil-overheat safety are "
+        "confirmable only on-car."),
 }
 EN_CATEGORY_EFFECT = {
-    "Patch - Flat Shift Ignition Retard": (
-        "More retard = bigger torque drop during the shift (less flare) but hotter exhaust. "
-        "Lower RPM threshold = acts earlier. Lower APP threshold = triggers on partial throttle "
-        "(more false triggers). Higher speed minimum = inactive at low speed."),
+    "WIP - Fuel Comp Cut Pattern (RE)": "Higher = more fuel (richer) during the cylinder-cut torque reduction. Unused unless a CAN torque-limit request arrives. Leave them stock.",
+    "WIP - DBW Torque Coordinator (RE)": "Torque request, target throttle and anti-jerk behaviour. (Control) tables must equal their monitor copies. The band-pass coefficients are a computed set - do not edit them individually.",
+    "Spark Base - High Fuel Request Transition": "Higher threshold = switches to the high-fuel-request spark maps less readily; the advance values themselves do not change.",
+    "Fuel Target OL - Base": "Values are enrichment in % over stoich (0 = stoich). Higher = richer (safer, power side); lower = leaner (dangerous at high load). Change only with wideband AFR measurements.",
+    "Fuel IPW - Dynamic Trim Mult A (Large)": "Transient (wall-wetting) compensation coefficients: they change tip-in/tip-out mixture, not steady-state AFR. Normally stock.",
+    "Fuel IPW - Dynamic Trim Mult B (Small)": "Transient (wall-wetting) compensation coefficients: they change tip-in/tip-out mixture, not steady-state AFR. Normally stock.",
+    "Fuel IPW - Dynamic Trim Mult C": "Transient (wall-wetting) compensation multiplier: higher = more transient compensation; steady-state AFR unchanged. Normally stock.",
+    "Spark Correction - Knock Retard": "Direction differs per table: retard amounts (KR Increment / Maximum) - higher = more protection; restore speed (KR Decrement Rate) - higher = returns to advance sooner = less protection; narrowing the Knock Listen RPM/load window leaves more of the range unmonitored; Delay - higher = slower restore.",
+    "Patch - Flat Shift": (
+        "Method 0=retard (gentler; more retard = bigger torque drop, lower floor = bigger retard), "
+        "1=true cut (no coil charge = no spark; raw fuel to exhaust = backfire/high EGT). Active only "
+        "while clutch pressed + gates hold (clutch dip sets the duration). Lower RPM/APP threshold = "
+        "triggers earlier / on partial throttle; RPM threshold also acts as a cap. Higher speed minimum "
+        "= inactive at low speed. No RAM writes, no window. test_mode=1 ignores only the speed gate "
+        "(standstill check: won't fire at idle, rev in neutral to trigger; set 0 to drive)."),
 }
 
-# 定義に無い追加項目(ncecu/flatshift.py)の説明: 番地 -> (日本語, 英語)
+# 定義に無い追加項目(ncecu のパッチモジュール)の説明: 番地 -> (日本語, 英語)
 EXTRA_DESC = {
     0xC53B8: ("車速がこの値[km/h]未満のときだけ、クラッチ踏込時に『レブリミット スロットルカット | クラッチ踏込』"
               "(@0x0C53BC)が使われる(純正2.0=停車中のみ)。それ以上の車速では CPP clear(10000rpm)側になる。",
@@ -717,31 +766,164 @@ EXTRA_DESC = {
     0xC53C4: ("スロットルカット成立中は、回転が『リミット−この値』を下回るまで解除しない(純正100rpm)。",
               "Once active, the throttle cut stays until RPM falls below the limit minus this value "
               "(stock 100 rpm)."),
-    0xDE260: ("アクセル開度がこの値[%]を超えていること。0〜100。", "APP must exceed this value [%]. 0-100."),
-    0xDE264: ("エンジン回転がこの値[rpm]を超えている間リタードする(ソフトリミッタ)。3000〜7500。",
-              "Retard while RPM is above this value [rpm] (soft limiter). 3000-7500."),
-    0xDE268: ("車速がこの値[km/h]を超えていること。停車中(ローンチ側)と分ける。0〜250。",
+    0xDE300: ("アクセル開度がこの値[%]を超えていること。0〜100。", "APP must exceed this value [%]. 0-100."),
+    0xDE304: ("エンジン回転がこの値[rpm]を超えていること。1000〜8000(低回転テストは下げる)。",
+              "RPM must exceed this value [rpm]. 1000-8000 (lower for low-RPM testing)."),
+    0xDE308: ("車速がこの値[km/h]を超えていること。停車中(ローンチ側)と分ける。0〜250。",
               "Vehicle speed must exceed this value [km/h], to separate from standstill/launch. 0-250."),
-    0xDE26C: ("最終進角から引く量[°]。純正の最大リタードで下限制限される。0〜30。",
-              "Degrees subtracted from the final spark advance (floored by the stock max retard). 0-30."),
+    0xDE30C: ("点火遅角方式で最終進角から引く量[°]。下限(@0xDE310)まで深く引ける=大遅角もこれで調整。0〜60。",
+              "Retard method: degrees subtracted from final advance, down to the floor (@0xDE310). 0-60."),
+    0xDE310: ("点火遅角方式の下限=最小進角[°]。負=ATDC。純正の最大リタードに縛られず深く引ける。-30〜20。",
+              "Retard method floor = minimum advance [deg] (neg=ATDC; past the stock max-retard limit). -30..20."),
+    0xDE314: ("方式: 0=点火遅角 / 1=本物の点火カット(発動中コイル充電を止めて火花停止)。",
+              "Method: 0=ignition retard / 1=true ignition cut (suppress coil charge = no spark while active)."),
+    0xDE318: ("デバッグ test_mode: 1=車速ゲートだけ無視し、クラッチ+回転+アクセルで発動(停車確認用)。始動/アイドルは低回転で不発=クラッチ始動を妨げない、停車Nで回転を上げると発動。走行時は0に戻すこと。",
+              "Debug test_mode: 1=ignore only the speed gate (clutch+RPM+APP still required); standstill "
+              "check — won't fire at cranking/idle (low RPM), rev in neutral to trigger. Set 0 to drive."),
 }
 # 追加項目の単位(名前からの推定より優先)
 EXACT_UNITS = {
     "Rev Limit Throttle Cut | CPP set - Vehicle Speed Threshold": "km/h",
     "Rev Limit Throttle Cut | CPP set - Hysteresis": "rpm",
-    "Flat Shift Retard - APP Threshold": "%",
-    "Flat Shift Retard - RPM Threshold": "rpm",
-    "Flat Shift Retard - Vehicle Speed Minimum": "km/h",
-    "Flat Shift Retard - Retard Amount": "°",
+    "Flat Shift - APP Threshold": "%",
+    "Flat Shift - RPM Threshold": "rpm",
+    "Flat Shift - Vehicle Speed Minimum": "km/h",
+    "Flat Shift - Retard Amount [deg]": "°",
+    "Flat Shift - Min Advance Floor [deg]": "°",
 }
 
 
+# 定義(LibreTuner / 逆解析で追加した表)に対する補足: 番地 -> (日本語, 英語)。2026-11-16 の全表監査で、
+# 定義名どおりに読めない表・写しのある表・この ROM では無効な定義に付けた。
+_CTRL = ("制御側の表。安全監視(Data Integrity)側に同じ値の写し %s がある。変えるときは必ず両方を同じ値にする。",
+         "Control-side table. The monitor (Data Integrity) copy at %s holds the same values - always change both together.")
+_SET = ("トルクモデルの組 %s(係数k / MBT点火 / トルク)。0x3C7xx で3枚を続けて引く。",
+        "Torque-model set %s (factor k / MBT spark / torque): the three are looked up together at 0x3C7xx.")
+TABLE_NOTES = {
+    0xD4288: ("値は目標λではなく、理論空燃比からの燃料増量(%)。回転×負荷で引いた値(RAM 0xFFFF7844)に条件の補正を足して 0xFFFF7828 とし、"
+              "ほかの増量項と合計した Σ%(0xFFFF782C)から閉ループの目標λ = 100 ÷ (100 + Σ%) を作る(0x4B5B0)。ほかの項が 0 なら 0.5 → λ0.995、1.32 → λ0.987。"
+              "値↑ = 目標が濃くなる。0xFFFF7346 のビット 2 が立っているときは使わない(0 扱い)。",
+              "Not a lambda target: the values are fuel enrichment in % over stoich. The looked-up value (RAM 0xFFFF7844) plus condition offsets becomes 0xFFFF7828; "
+              "summed with the other enrichment terms (0xFFFF782C) it gives the closed-loop target lambda = 100 / (100 + sum%) (0x4B5B0). With the other terms at 0, 0.5 -> lambda 0.995, 1.32 -> lambda 0.987. "
+              "Higher = richer target. Not used (treated as 0) while bit 2 of 0xFFFF7346 is set."),
+    0xBF9F6: ("ファンの段が変わったときに入れ直す待ちカウント(RAM 0xFFFFA002)。25ms ごとに 1 減る(0x9920A)。120 = 3.0 秒。"
+              "1 カウントの時間は OS のタスク周期(1ms 割り込み → 5ms → その 5 回に 1 回 = 25ms)。1ms 刻みと 25ms のサブタスクは"
+              "実車で確認した(2026-11-17、キーON・エンジン停止で、10ms ごとの CAN フレームと ECU のカウンタを比べた)。"
+              "ファンが段を変えるまでの実際の時間は測っていない。",
+              "Wait count reloaded when the fan stage changes (RAM 0xFFFFA002); it drops by 1 every 25 ms (0x9920A). 120 = 3.0 s. "
+              "The count period is the OS task period (1 ms interrupt -> 5 ms -> every 5th = 25 ms). The 1 ms tick and the 25 ms "
+              "sub-task were confirmed on the car (2026-11-17, key on / engine off, ECU counters against the 10 ms CAN frames); "
+              "the actual fan stage-change delay has not been timed."),
+    0xCE38A: ("この番地は 0xFFFF の詰め物で、コードから参照されていない(この ROM では無効な定義)。編集しても効果はない。隣の 0xCE388 / 0xCE389 は 1 と比較されるモードフラグ。",
+              "This address holds 0xFFFF padding and is not referenced by the code (invalid definition for this ROM); editing it has no effect. The neighbours 0xCE388 / 0xCE389 are mode flags compared with 1."),
+    0xCE390: ("名前は Lambda だが、比較相手は燃料要求の増量%(RAM 0xFFFF7728)。6.25 は 6.25% の意味。",
+              "Named Lambda, but it is compared with the fuel-request enrichment in % (RAM 0xFFFF7728): 6.25 means 6.25 %."),
+    0xC49CC: ("横軸は回転数(定義の軸名は LOAD_7004 だったが、表引きの入力は回転数。0x42206 で確認)。",
+              "The axis is engine speed (the definition named it LOAD_7004, but the look-up input is RPM; checked at 0x42206)."),
+    0xC16D8: (_SET[0] % "1 = 01 / 02 / 03", _SET[1] % "1 = 01 / 02 / 03"),
+    0xC1AC4: (_SET[0] % "1 = 01 / 02 / 03", _SET[1] % "1 = 01 / 02 / 03"),
+    0xC1EB0: (_SET[0] % "1 = 01 / 02 / 03", _SET[1] % "1 = 01 / 02 / 03"),
+    0xC229C: (_SET[0] % "2 = 04 / 07 / 10", _SET[1] % "2 = 04 / 07 / 10"),
+    0xC2E60: (_SET[0] % "2 = 04 / 07 / 10", _SET[1] % "2 = 04 / 07 / 10"),
+    0xC3A24: (_SET[0] % "2 = 04 / 07 / 10", _SET[1] % "2 = 04 / 07 / 10"),
+    0xC2688: (_SET[0] % "3 = 05 / 08 / 11", _SET[1] % "3 = 05 / 08 / 11"),
+    0xC324C: (_SET[0] % "3 = 05 / 08 / 11", _SET[1] % "3 = 05 / 08 / 11"),
+    0xC3E10: (_SET[0] % "3 = 05 / 08 / 11", _SET[1] % "3 = 05 / 08 / 11"),
+    0xC2A74: (_SET[0] % "4 = 06 / 09 / 12", _SET[1] % "4 = 06 / 09 / 12"),
+    0xC3638: (_SET[0] % "4 = 06 / 09 / 12", _SET[1] % "4 = 06 / 09 / 12"),
+    0xC41FC: (_SET[0] % "4 = 06 / 09 / 12", _SET[1] % "4 = 06 / 09 / 12"),
+    0xC45C4: ("回転×水温の表。0x3DB44 で、いまの水温の値と 80℃ の値を続けて引く(差を使う補正と推定)。値の単位は未確認。",
+              "RPM x coolant table. At 0x3DB44 it is looked up at the current coolant temperature and again at 80 C (presumably a correction from the difference). Unit unconfirmed."),
+}
+
+_AC = ("アフタークーリングのファンタイマ。100ms ごとに 1 減る(0x993D4 / 0x9932C。25ms のサブタスクの 4 回に 1 回)。%s"
+       "1 カウントの時間は OS のタスク周期から求めた値(1ms 刻みと 25ms のサブタスクは実車で確認、100ms はその 4 回に 1 回)。"
+       "キーOFF後に実際にファンが回る時間は測っていない。",
+       "After-cooling fan timer; it drops by 1 every 100 ms (0x993D4 / 0x9932C, every 4th run of the 25 ms sub-task). %s"
+       "The count period comes from the OS task period (1 ms tick and 25 ms sub-task confirmed on the car; 100 ms = every 4th run). "
+       "The actual after-cooling run time has not been timed.")
+TABLE_NOTES.update({
+    0xBFA06: (_AC[0] % "225 = 22.5 秒。", _AC[1] % "225 = 22.5 s. "),
+    0xBFA08: (_AC[0] % "750 = 75 秒。", _AC[1] % "750 = 75 s. "),
+    0xBFB80: (_AC[0] % "大気圧(54〜109kPa)で引く。900 = 90 秒。", _AC[1] % "Looked up by barometric pressure (54-109 kPa). 900 = 90 s. "),
+    0xBFBB0: (_AC[0] % "大気圧(54〜109kPa)で引く。0 = 0 秒。", _AC[1] % "Looked up by barometric pressure (54-109 kPa). 0 = 0 s. "),
+    0xC045C: ("値はギアごとの駆動系しゃくり(前後振動)の振動数[Hz]:1速 2.55 / 2速 3.75 / 3速 4.44 / 4速 5.4 / 5速 5.6 / 6速 6.29。"
+              "回転数÷車速(RAM 0xFFFF7A18)で引いて 0xFFFF7A0C に入れ、しゃくり振動フィルタ係数(0xC0B38 ほか)と、トルク要求の振動抑制の帯域フィルタ(0xC65D4 ほか)の中心周波数に使う。",
+              "The values are the per-gear driveline shuffle frequency [Hz]: 1st 2.55 / 2nd 3.75 / 3rd 4.44 / 4th 5.4 / 5th 5.6 / 6th 6.29. "
+              "Looked up by RPM / vehicle speed (RAM 0xFFFF7A18) into 0xFFFF7A0C; it selects the shuffle-filter coefficients (0xC0B38 etc.) and the centre frequency of the torque-request anti-jerk band-pass (0xC65D4 etc.)."),
+})
+_LUG = ("急開時アンチラグ(点火遅角)の振動抽出フィルタの係数 %s。帯域フィルタ H(s)=2ζωs/(s²+2ζωs+ω²) を ζ=1.25、ω=2π×しゃくり振動数(縦軸)、"
+        "T=燃焼 1 回の時間(30÷回転数 秒)で離散化した値と一致する(例 2Hz・1000rpm: b0=0.5962 / a1=−1.2987 / a2=0.3897。500rpm と 5000rpm の列、1Hz の行は隣と同じ値)。"
+        "入力は負荷(0.1〜2.0 に制限)、振動成分÷入力 × 0.25(0xC0444)を遅角の計算に使う(0x4CC9E)。3 枚で 1 組の計算値なので、個別に変えない。",
+        "Coefficient %s of the oscillation filter of the tip-in anti-lug (spark retard). The values match the band-pass H(s)=2*zeta*w*s/(s^2+2*zeta*w*s+w^2) discretised with zeta=1.25, "
+        "w=2*pi*shuffle frequency (Y axis) and T = one combustion interval (30/RPM s) (e.g. 2 Hz, 1000 rpm: b0=0.5962 / a1=-1.2987 / a2=0.3897; the 500 / 5000 rpm columns and the 1 Hz row repeat their neighbours). "
+        "Input is load (clamped 0.1-2.0); oscillation / input x 0.25 (0xC0444) feeds the retard (0x4CC9E). The three are one computed set - do not edit them individually.")
+for _a, _k in ((0xC0B38, "b0"), (0xC0CC0, "a1"), (0xC0E48, "a2")):
+    TABLE_NOTES[_a] = (_LUG[0] % _k, _LUG[1] % _k)
+_BPF = ("トルク要求の振動抑制: 運転者のトルク要求(RAM 0xFFFF3858)から駆動系しゃくりの振動数の成分を取り出す 2 次の帯域フィルタの係数 %s。"
+        "中心周波数 = 横軸(しゃくり振動数 Hz)、Q = 縦軸(使うのは定数 0x%05X = 0.3)。5ms 周期で計算すると中心周波数で利得 1 になる(0x%05X)。"
+        "取り出した成分にゲインを掛けてトルク要求から差し引く(0xFFFF382C)。5 枚で 1 組の計算値なので、個別に変えない。",
+        "Torque-request anti-jerk: coefficient %s of the 2nd-order band-pass that picks the driveline-shuffle frequency out of the driver torque request (RAM 0xFFFF3858). "
+        "Centre frequency = X axis (shuffle Hz), Q = Y axis (the code uses the constant 0x%05X = 0.3). Evaluated every 5 ms it has unity gain at the centre frequency (0x%05X). "
+        "The extracted part, times a gain, is subtracted from the torque request (0xFFFF382C). The five are one computed set - do not edit them individually.")
+for _c, _m, _k in ((0xC65D4, 0xF9A0C, "b0"), (0xC66CC, 0xF9B04, "b1"), (0xC67C4, 0xF9BFC, "b2"), (0xC68BC, 0xF9CF4, "a1"), (0xC69B4, 0xF9DEC, "a2")):
+    TABLE_NOTES[_c] = (_BPF[0] % (_k, 0xC5358, 0x971A8), _BPF[1] % (_k, 0xC5358, 0x971A8))
+    TABLE_NOTES[_m] = (_BPF[0] % (_k, 0xF7654, 0xB0578), _BPF[1] % (_k, 0xF7654, 0xB0578))
+_GAIN = ("トルク要求の振動抑制のゲイン。横軸 = ギア(RAM 0xFFFF7A04、0 = ギアが入っていない)、縦軸 = 踏み込みの段階(RAM 0xFFFF79FC: 0 = なし、"
+         "1 = 踏み込み量 8 以下、2 = 8〜15、3 = 15 以上。しきい値 0xC0428 / 0xC042C)。値↑ = 振動を強く抑える(加速の出だしが鈍くなる方向)。",
+         "Torque-request anti-jerk gain. X = gear (RAM 0xFFFF7A04, 0 = not engaged), Y = tip-in stage (RAM 0xFFFF79FC: 0 = none, "
+         "1 = pedal step up to 8, 2 = 8-15, 3 = 15 or more; thresholds 0xC0428 / 0xC042C). Higher = stronger damping (a softer initial response).")
+TABLE_NOTES[0xC6AA0] = _GAIN
+TABLE_NOTES[0xF9ED8] = _GAIN
+_CUT = ("燃料の増量%%の 1 項(RAM 0xFFFF75DC)。ほかの増量項と合計して噴射量に掛ける(0x45A3C)。回転×負荷(0xFFFF6EC8)で引き、0xFFFF7064 が立っているときだけ使う(0 なら 0%%)。"
+        "0xFFFF7064 が立つのは、CAN(ID 0x211)のフレームの先頭 2 バイト − 10000 のトルク上限(RAM 0xFFFF7024)が要求トルク(0xFFFF7018)を下回り、一部の気筒の燃料を止めてトルクを下げるとき"
+        "(0x3D140)。止める段階は上限と 0xFFFF7004 / 7008 / 700C の比較で決まる。フレームが来ない(20 回途切れる)と上限は 0xFFFF − 10000 = 55535 で、使われない。"
+        "%s 747D は燃料カットの気筒パターン(0xC4D84〜)から決まる。実車では 0x211 が約 100 回/秒で流れていて、ふだんの値は 0xFFFF(上限なし)(2026-11-17 の読み出し)。送り手は DSC/TCS などと推定(未確認)で、介入したときだけ上限が下がると見られる。",
+        "One fuel-enrichment term in %% (RAM 0xFFFF75DC), summed with the others and applied to the injection amount (0x45A3C). Looked up by RPM x load (0xFFFF6EC8), used only while 0xFFFF7064 is set (otherwise 0 %%). "
+        "0xFFFF7064 is set when the torque limit (RAM 0xFFFF7024 = first 2 bytes of CAN frame ID 0x211 - 10000) is below the requested torque (0xFFFF7018) and fuel is cut on some cylinders to lower the torque (0x3D140); "
+        "the cut stage comes from comparing the limit with 0xFFFF7004 / 7008 / 700C. Without the frame (20 misses) the limit is 0xFFFF - 10000 = 55535 and the tables are unused. "
+        "%s 747D comes from the fuel-cut cylinder pattern (0xC4D84...). On the car 0x211 arrives about 100 times/s and normally reads 0xFFFF (no limit) (read on 2026-11-17). The sender is presumably DSC/TCS (not confirmed); the limit should drop only when it intervenes.")
+TABLE_NOTES[0xC4DFC] = (_CUT[0] % "A は RAM 0xFFFF747D = 0 のとき(値 38〜56%)。", _CUT[1] % "A: when RAM 0xFFFF747D = 0 (38-56 %).")
+TABLE_NOTES[0xC4F98] = (_CUT[0] % "B は 747D ≠ 0 のとき(値 +23〜−9%)。", _CUT[1] % "B: when 747D != 0 (+23 to -9 %).")
+TABLE_NOTES[0xC5134] = (_CUT[0] % "C は 747D ≠ 0 かつ RAM 0xFFFF5255 = 1 のとき(値 −4〜−9.5%)。", _CUT[1] % "C: when 747D != 0 and RAM 0xFFFF5255 = 1 (-4 to -9.5 %).")
+
+# 制御側と安全監視(Data Integrity)側の写しの組 (制御, 監視)。寸法・軸・値は ROM 3本(実車純正・ベンチ原本・運用中)とも
+# 同じで、読むコードも別(制御=0x40xxx/0x95〜0x97xxx/0xD6xxx 系、監視=0xAF〜0xB1xxx 系)。2026-11-16 確認。
+# どちらの表を開いても、説明欄に相方の番地を出す。
+CONTROL_MONITOR_PAIRS = (
+    (0xC7EE4, 0xF7C90), (0xC81B4, 0xF7F60), (0xC8484, 0xF8230), (0xC8754, 0xF8500), (0xC8A24, 0xF87D0),  # 目標スロットル 1/2/3/4-6速/N
+    (0xC5710, 0xF8B48), (0xC5E1C, 0xF9254), (0xC6BC8, 0xFA000), (0xC7400, 0xFA838),                      # 車速倍率・BMEP 3面
+    (0xC55B4, 0xF7BDC), (0xC55FC, 0xF7C24), (0xC5644, 0xF7C6C),                                          # スロットル指令 スケーリング/最大/最小
+    (0xC7D7C, 0xF7930), (0xC7E0C, 0xF79C0), (0xC7E9C, 0xF78A0),                                          # APP→目標スロットル 最大/最小/WIP
+    (0xD6C9C, 0xF4DEC), (0xD6CDC, 0xF4E2C),                                                              # アイドル目標 走行/非走行
+    (0xC65D4, 0xF9A0C), (0xC66CC, 0xF9B04), (0xC67C4, 0xF9BFC), (0xC68BC, 0xF9CF4), (0xC69B4, 0xF9DEC),  # 振動抑制 帯域フィルタ係数
+    (0xC6AA0, 0xF9ED8),                                                                                  # 振動抑制 ゲイン
+)
+_MON = ("安全監視(Data Integrity)側の表。制御側に同じ値の写し %s がある。変えるときは必ず両方を同じ値にする"
+        "(片方だけだと監視が不一致を検出する)。",
+        "Monitor (Data Integrity) table. The control-side copy at %s holds the same values - always change both together "
+        "(changing one side only makes the monitor detect a mismatch).")
+for _c, _m in CONTROL_MONITOR_PAIRS:
+    for _a, _p, _t in ((_c, _m, _CTRL), (_m, _c, _MON)):
+        _pj, _pe = _t[0] % ("0x%05X" % _p), _t[1] % ("0x%05X" % _p)
+        if _a in TABLE_NOTES:          # 固有の説明があれば、その後ろに相方の番地を足す
+            TABLE_NOTES[_a] = (TABLE_NOTES[_a][0] + " " + _pj, TABLE_NOTES[_a][1] + " " + _pe)
+        else:
+            TABLE_NOTES[_a] = (_pj, _pe)
+
+
 def table_desc(t) -> str:
-    """テーブル固有の説明。追加項目は現在言語の説明、それ以外は定義由来の desc。"""
-    d = EXTRA_DESC.get(getattr(t, "address", None))
-    if d and not getattr(t, "desc", ""):
-        return d[1] if _LANG == "en" else d[0]
-    return getattr(t, "desc", "") or ""
+    """テーブル固有の説明。逆解析で付けた説明(日英。追加項目・TABLE_NOTES)があればそれを現在の言語で出す。
+    定義(LibreTuner)由来の desc は英文なので、英語表示のときだけ後ろに付ける(日本語表示では英文で
+    日本語の説明が隠れていた: Idle Speed - Base の制御側 2 表)。"""
+    d = EXTRA_DESC.get(getattr(t, "address", None)) or TABLE_NOTES.get(getattr(t, "address", None))
+    desc = getattr(t, "desc", "") or ""
+    if d:
+        txt = d[1] if _LANG == "en" else d[0]
+        if desc and _LANG == "en" and desc not in txt:
+            txt += " " + desc
+        return txt
+    return desc
 
 
 def describe_category(en: str) -> str:
@@ -794,7 +976,9 @@ AXIS = {
     "O": ("O2", "O2", ""),
     "ETHANOL": ("エタノール濃度", "Ethanol", "%"),
     "ETC": ("電子スロットル", "ETC", ""),
-    "FFFF": ("(未使用)", "(unused)", ""),
+    # 軸名 "FFFF_xxxx" は「入力が RAM 0xFFFFxxxx の変数(名前未特定)」の意味で、未使用ではない。
+    # 番地つきの表示は _ffff_axis() が行う(ここは番地が読めない場合の予備)。
+    "FFFF": ("RAM変数(未特定)", "RAM variable (unidentified)", ""),
 }
 
 # 軸名の接頭辞が物理量と一致しない(LibreTuner命名の都合)軸の明示ラベル。
@@ -825,6 +1009,34 @@ AXIS_SPECIAL = {
     # IDLE_* 軸は既定だと接頭辞 "IDLE"→"アイドル" で全て同じ表示になり区別できない。
     # 物理量ごとに別ラベルを与える。startswith 判定のため具体的なキーを先に並べる
     # (IDLE_SPEED_TRIM を IDLE_SPEED より前に置く)。
+    # 差・偏差・派生量の軸。接頭辞だけで判定すると元の量(車速/回転数/水温…)と同じ表示になり、
+    # 値域(負の値や 0〜3 のモード番号)と合わない。名前に書いてある内容で表示する(2026-11-16 監査)。
+    "IDLE_SPEED_7044 - RPM": ("目標アイドル−回転数", "Idle target minus RPM", "rpm"),
+    "RPM_6DD8 - IDLE_SPEED": ("回転数−目標アイドル", "RPM minus idle target", "rpm"),
+    "VSS_DELTA": ("車速偏差(目標との差)", "Speed error", "km/h"),
+    "VSS_INTERPOLATED": ("車速系の内部値(単位未確認)", "Speed-related internal value (unit unverified)", ""),
+    "BARO - ((IAT": ("空気密度の指標(大気圧と吸気温から)", "Air-density term (baro, IAT)", ""),
+    "VCT_ERR_ACCUM": ("VCT誤差の累積", "VCT error (accumulated)", ""),
+    "ECT_START": ("始動時水温", "Coolant at start", "°C"),
+    "ECT_AT_START": ("始動時水温", "Coolant at start", "°C"),
+    "APP_DELTA_MODE": ("アクセル変化モード", "APP delta mode", ""),
+    "FUEL_TARGET": ("目標燃料(増量)", "Fuel target (enrichment)", ""),
+    "O2S12_V": ("リアO2センサ電圧", "Rear O2 sensor voltage", "V"),
+    "REQ_TORQUE": ("要求トルク", "Requested torque", "N·m"),
+    "DIFF_FUEL_PRESSURE": ("燃料差圧(単位未確認)", "Differential fuel pressure (unit unverified)", ""),
+    "EGRP_STEPS": ("EGR位置(実/目標の比)", "EGR position (actual/target)", ""),
+    "ALT_AMPS": ("オルタネータ電流", "Alternator current", "A"),
+    "ALT_RPM": ("オルタネータ回転数", "Alternator speed", "rpm"),
+    "ALT_TEMP": ("オルタネータ温度(補正後)", "Alternator temp (corrected)", "°C"),
+    "ALT_SENSOR_V_DELTA_RATIO": ("オルタ電流センサ電圧の変化比", "Alt sensor-voltage delta ratio", ""),
+    "INTERP_ALT_FIELD_CONTROL_DUTY": ("オルタ界磁デューティ(補間)", "Alt field duty (interp.)", "%"),
+    "APP_SCALED": ("アクセル開度(スケール後)", "APP (scaled)", "%"),
+    "AX_GEN": ("軸(入力未特定)", "Axis (input unidentified)", ""),
+    # 2026-11-16 の逆解析で中身が分かった軸(以前は AX_GEN)。
+    "SHUFFLE_HZ": ("駆動系のしゃくり振動数", "Driveline shuffle frequency", "Hz"),   # RAM 0xFFFF7A0C(ギア別、0xC045C)
+    "BPF_Q": ("帯域フィルタのQ値", "Band-pass Q", ""),                           # 使うのは定数 0xC5358 = 0.3
+    "GEAR_ENGAGED": ("ギア(0=未接続)", "Gear (0 = not engaged)", ""),             # RAM 0xFFFF7A04
+    "TIPIN_STAGE": ("踏み込みの段階(0〜3)", "Tip-in stage (0-3)", ""),             # RAM 0xFFFF79FC
     "IDLE_ERROR": ("アイドル回転偏差", "Idle Speed Error", "rpm"),      # 実回転−目標(±rpm)
     "IDLE_LOAD": ("アイドル負荷", "Idle Load", ""),                      # 0〜1 正規化負荷
     "IDLE_SPEED_TRIM": ("アイドル回転トリム位置", "Idle Speed Trim Pos", ""),
@@ -835,8 +1047,58 @@ AXIS_SPECIAL = {
 }
 
 
+# "FFFF_xxxx" 軸。名前の数字は LibreTuner が使った別 ROM の RAM 番地で、この ROM の番地ではない
+# (ずれ幅は場所で違う)。2026-11-16 にこの ROM のコードで入力を確かめた(tools/gen_axis_ram.py)。
+# 中身が分かったもの(コメントはこの ROM での実番地と根拠):
+_FFFF_KNOWN = {
+    "6800": ("オルタネータ回転数", "Alternator speed", "rpm"),                  # 0xFFFF67A0 = 回転数 × 0xD81E4(0x2F658)
+    "6808": ("オルタネータ温度(補正後)", "Alternator temp (corrected)", "°C"),   # 0xFFFF67A8(= ALT_TEMP_CORRECTED_6808)
+    "680C": ("吸気温(オルタ制御用)", "IAT (alternator control)", "°C"),         # 0xFFFF67AC = 吸気温。センサ故障時 0xD81FC(0x2F7D4)
+    "67FC": ("電源電圧の最低値", "Minimum supply voltage", "V"),                 # 0xFFFF679C = min(電源電圧 0xFFFF6C60 + 0.11)(0x2EF72)
+    "6850": ("アイドルへの到達率(0〜1)", "Idle approach ratio (0-1)", ""),       # 0xFFFF67F0 = (回転数−水温別下限)/(目標アイドル−下限)(0x3019C)
+    "8154": ("オルタ界磁デューティ(補間)", "Alt field duty (interp.)", "%"),     # 監視側。= INTERP_ALT_FIELD_CONTROL_DUTY_8154
+    "788F": ("MAFステージ(0〜3)", "MAF stage (0-3)", ""),                        # 0xFFFF7861(1 バイト)
+    # 2026-11-17 追加
+    "6C44": ("パージの立ち上げ量(内部値)", "Purge ramp-in (internal)", ""),        # 0xFFFF6BE0: 1367 ずつ増やし 15039 で止める(0x37526)
+    "7530": ("吸気負圧(大気圧−吸気圧)", "Intake vacuum (baro - MAP)", "kPa"),   # 0xFFFF7490 = 大気圧 − 吸気圧 0xFFFF7124(MAP センサ、0x446C8)
+    "8104": ("水温の平均(監視側)", "Coolant temp average (monitor)", "°C"),     # 監視側が水温 0xFFFF6CC8 を平均した値(0xB3880)
+    "6DB0": ("AT の回転比(推定入力回転÷エンジン回転)", "AT speed ratio (est. input / engine)", ""),  # 0xFFFF6D34(0x38D64)
+    "7F74": ("負荷の変化量(負荷と平滑値の差)", "Load change (|load - smoothed|)", ""),  # 0xFFFF7E68(0x52F7A)
+}
+# 中身は未特定だが、この ROM での実番地は分かったもの(番地, 日本語の前置き, 英語の前置き)。
+_FFFF_REAL = {
+    "6858": (0xFFFF67F8, "RAM", "RAM"),                                  # 0xFFFF6980 を一次遅れで平滑した値(0x30228)
+    # オルタの学習(バックアップ RAM)。表の増減を積算し 0〜200 に制限(既定 95)。この較正では有効化バイト
+    # 0xD815B / 0xD815D が 0 で休止している: 実車(2026-11-17 キーON)でも 215C = 216C = 95、2174 = 100 の既定値のまま。
+    "2170": (0xFFFF215C, "オルタの学習値(この較正では休止)", "Alternator learned value (dormant in this cal)"),
+    "2180": (0xFFFF216C, "オルタの学習値(この較正では休止)", "Alternator learned value (dormant in this cal)"),
+    "2188": (0xFFFF2174, "オルタの学習カウント(休止)", "Alternator learned count (dormant)"),  # 16 ビット値(既定 0xD8170)
+}
+_FFFF_MONITOR = set()
+
+
+def _ffff_axis(up):
+    m = _re.match(r"FFFF_([0-9A-F]{4})", up)
+    if not m:
+        return None
+    k = m.group(1)
+    known = _FFFF_KNOWN.get(k)
+    if known:
+        return known
+    if k in _FFFF_REAL:
+        a, ja, en = _FFFF_REAL[k]
+        return ("%s 0x%08X(未特定)" % (ja, a), "%s 0x%08X (unidentified)" % (en, a), "")
+    if k in _FFFF_MONITOR:
+        return ("監視側の内部値(未特定)", "Monitor-side internal value (unidentified)", "")
+    return ("軸(入力未特定)", "Axis (input unidentified)", "")
+
+
 def _axis_special(name):
     up = name.upper()
+    if up.startswith("FFFF_"):
+        e = _ffff_axis(up)
+        if e:
+            return e
     for k, v in AXIS_SPECIAL.items():
         if up.startswith(k):
             return v
@@ -895,6 +1157,22 @@ def unit_of(category: str, name: str = "") -> str:
     if name in EXACT_UNITS:
         return EXACT_UNITS[name]
     nm = (name or "").lower()
+    # 回転数÷車速 のしきい値は比(rpm ÷ km/h)で、車速ではない。カテゴリ側の VSS 判定(km/h)に
+    # 先に取られていたので最初に判定する(2026-11-16 監査)。
+    if "rpm divided by vss" in nm:
+        return ""
+    # "Fuel Target CL - Base (Lambda)" の値は目標λではなく、理論空燃比からの燃料増量%。
+    # 合計 Σ% から目標λ = 100 / (100 + Σ%) を作る(0x4B5B0。2026-11-16 逆解析)。
+    if nm.strip() == "fuel target cl - base (lambda)":
+        return "%"
+    # 駆動系のしゃくり(振動)を取り出すフィルタの係数・ゲインは無次元。カテゴリの spark→° や
+    # 名前の torque→N·m に流さない。ギア別のしゃくり振動数(Calculated Gear Alt WIP)は Hz。
+    if "anti-jerk" in nm or "shuffle filter coefficient" in nm:
+        return ""
+    if "calculated gear alt" in nm:
+        return "Hz"
+    if "cut pattern enrichment" in nm:
+        return "%"
     # 推定体積流量(Estimated Volumetric Flow)系はデータの意味が名前で決まる。
     # カテゴリに "throttle duty" が入り % に誤判定されるため、名前で先に判定する。
     #   ・… Scaler/Scaling(密度スケーラ等) = 倍率 → "×"
@@ -939,6 +1217,8 @@ def unit_of(category: str, name: str = "") -> str:
     #   ・それ以外(Torque / Temp-Corr)= トルク → N·m(BMEP換算で負側-44N·m一致により確定)。
     # DBWトルク協調(RE): BMEPトルク=kPa, スロットル=%, 係数=無単位, その他=無単位。
     if "dbw torque coordinator" in (category or "").lower():
+        if "multiplier" in nm:
+            return "×"
         if "bmep" in nm:
             return "kPa"
         if "throttle" in nm:
@@ -947,6 +1227,8 @@ def unit_of(category: str, name: str = "") -> str:
     if "torque model bank" in (category or "").lower():
         if "factor" in nm or "coeff" in nm or "sens" in nm:
             return ""      # 無次元/2次係数(spark を名に含んでも係数は無単位 → spark判定より先)
+        if "model table" in nm:
+            return ""      # 回転×水温の表(13)。値 12〜72 の単位は未確認
         if "spark" in nm:
             return "°"
         return "N·m"
@@ -988,7 +1270,7 @@ def unit_of(category: str, name: str = "") -> str:
         if "correction factor" in nm:
             return "×"
         if "transition delay" in nm:
-            return "s"
+            return ""        # 遅延カウント。1カウントの時間は未確認なので秒とは書かない
         if "load threshold" in nm:
             return ""
     # APP(アクセル開度)しきい値は常に %。"IPW…Fuel Cut APP Threshold" が ipw→ms に誤マッチ
@@ -1137,9 +1419,10 @@ def unit_of(category: str, name: str = "") -> str:
     if "fuel request" in nm and (
         "threshold" in nm or "hysteresis" in nm or "delay" in nm
     ):
-        if "lambda" in nm:
-            return "λ"
-        if "(%)" in nm or "hysteresis" in nm:
+        # "High Fuel Request Threshold (Lambda)" は名前に Lambda とあるが、比較相手は燃料要求の
+        # 増量%(RAM 0xFFFF7728。0x4DF38 で比較)で、ヒステリシス(%)と同じ量。値 6.25 も % として
+        # 読むのが整合する(Fuel Target OL の表が増量%なのと同じ)。
+        if "lambda" in nm or "(%)" in nm or "hysteresis" in nm:
             return "%"
         return ""            # 移行遅延カウント / 単位未明記のしきい値
     # 点火アイドル負荷(Spark Idle Load)系: アイドル制御が狙う“エンジン負荷”の基準/補正で、
@@ -1265,14 +1548,22 @@ def unit_of(category: str, name: str = "") -> str:
         return ""
     # 電動ファン制御: 「… Speed」(低速/中速/高速=ファン段)が "speed"→km/h に誤マッチする。
     # タイマ=秒、選択=リレー選択ビットマスク(無単位)、速度遷移遅延=秒。
-    # VSS しきい値(→km/h)と ECT しきい値(→°C)は汎用判定に任せる。
+    # 水温しきい値 10 表(整数)は ℃ ではなく水温センサ電圧の 10bit A/D 値(ncecu/ectcount.py。
+    # 0x98F9E / 0x99278 が RAM 0xFFFF710E と比較する)。"ect"→°C に流さず A/D を返す。
+    # VSS しきい値(→km/h)と、浮動小数の "After Cooling Activation - Estimated ECT Threshold"(→°C)は
+    # 汎用判定に任せる。
     if "fan" in nm:
+        if ectcount.is_count_table(name):
+            return ectcount.UNIT
+        # タイマ/遅延はカウント値。1 カウントの時間は OS のタスク周期から求めた(2026-11-16 逆解析):
+        #   アフタークーリングのタイマ = 100ms ごとに 1 減る(0x993D4 / 0x9932C)
+        #   ファン段の切替待ち(Fan Speed Transition - Delay)= 25ms ごとに 1 減る(0x9920A)
         if "timer" in nm:
-            return "s"
+            return "×0.1s"
         if "selection" in nm:
             return ""
         if ("transition" in nm or "delay" in nm) and "vss" not in nm:
-            return "s"
+            return "×25ms"
     hay = f"{category or ''} {name or ''}".lower()
     # 短い略語("ect"/"iat")は単語境界で判定する。部分一致だと corrECTion / selECTion /
     # detECTed / corrECTed などに誤マッチして誤って °C になるため(28テーブルで誤判定していた)。
@@ -1298,7 +1589,7 @@ UI = {
     "dump": ("ECU吸出し", "Read ECU"),
     "cmp_ecu": ("ECUと照合", "Compare ECU"),
     "cmp_rom": ("ROM照合", "Compare ROMs"),
-    "search": ("検索:", "Search:"),
+    "search": ("検索(名前/0x番地):", "Search (name / 0x addr):"),
     "lang": ("EN", "日本語"),      # ボタンは「次に切替える言語」を表示
     "unit": ("単位", "unit"),
     "axis_x": ("横軸(X)", "X axis"),
@@ -1329,37 +1620,22 @@ UI = {
         "Enable axis editing?"),
     "fs_patch": ("フラットシフト", "Flat-shift"),
     "al_patch": ("アンチラグ", "Anti-lag"),
+    "rd_patch": ("回転落ち高速化（レブハング低減）", "Faster rev drop"),
     "th_patch": ("電スロチューニング", "DBW throttle"),
-    "fs_title": ("フラットシフト点火リタード", "Flat-shift ignition retard"),
-    "fs_confirm": (
-        "このROMにフラットシフト用の点火リタード・パッチ(第3ドラフト)を当てます。\n\n"
-        "・点火制御を書き換えるコードパッチです。ベンチ検証用のドラフトで、実機では未検証です。\n"
-        "・発動条件: クラッチ踏込 かつ アクセル開度>{app:g}% かつ 回転>{rpm:g}rpm かつ 車速>{vss:g}km/h\n"
-        "・発動中は最終進角から {retard:g}° 引きます(純正の最大リタードで下限制限)。\n"
-        "・値は適用後に左のツリー『パッチ - フラットシフト（点火リタード）』で変更できます。\n"
-        "・メモリ上のROMだけを変更します。保存するまでファイルは変わりません(保存時にチェックサム自動補正)。\n"
-        "・書き込みは予備/ベンチECUで。元のROMは必ず保管してください。\n\n"
-        "適用しますか?",
-        "Apply the flat-shift ignition-retard patch (draft 3) to this ROM?\n\n"
-        "- This is a code patch to ignition control. Draft for bench validation; not yet tested on hardware.\n"
-        "- Trigger: clutch pressed AND APP > {app:g}% AND RPM > {rpm:g} rpm AND speed > {vss:g} km/h\n"
-        "- While active, {retard:g} deg is subtracted from the final advance (floored by stock max retard).\n"
-        "- Values can be changed afterwards under 'Patch - Flat Shift Ignition Retard' in the tree.\n"
-        "- Only the ROM in memory is changed; the file is untouched until you save "
-        "(checksums are corrected on save).\n"
-        "- Flash a spare/bench ECU and keep your original ROM.\n\n"
-        "Apply?"),
-    "fs_done": ("パッチを適用しました(未保存)。左のツリーの『パッチ - フラットシフト（点火リタード）』で値を変更できます。",
-                "Patch applied (not saved yet). Edit the values under 'Patch - Flat Shift Ignition Retard'."),
-    "fs_already": ("このROMには既にパッチが当たっています。左のツリーの『パッチ - フラットシフト（点火リタード）』で値を変更できます。",
-                   "This ROM already has the patch. Edit the values under 'Patch - Flat Shift Ignition Retard'."),
+    "fs_title": ("フラットシフト（点火カット/遅角）", "Flat shift (ignition cut/retard)"),
+    "fs_done": ("パッチを適用しました(未保存)。左のツリーの『パッチ - フラットシフト』で値を変更できます。",
+                "Patch applied (not saved yet). Edit the values under 'Patch - Flat Shift'."),
+    "fs_already": ("このROMには既にパッチが当たっています。左のツリーの『パッチ - フラットシフト』で値を変更できます。",
+                   "This ROM already has the patch. Edit the values under 'Patch - Flat Shift'."),
     "fs_unsupported": ("このROMには適用できません(未対応ROM、または別のパッチと衝突しています)。\n{err}",
                        "Cannot apply to this ROM (unsupported, or conflicts with another patch).\n{err}"),
     "menu_settings": ("設定", "Settings"),
     "menu_live_intervals": ("ライブPID間引き…", "Live PID intervals…"),
     "li_title": ("ライブPID間引き設定", "Live PID poll intervals"),
-    "li_note": ("変化のゆっくりしたPIDの問い合わせ間隔を設定します(1要求=最大6PID)。\n「毎回」の項目を6個以内にすると、回転数など速いPIDの更新が最速になります。",
-                "Set how often each PID is polled (up to 6 PIDs per request).\nKeep the 'every cycle' items within 6 for the fastest RPM update."),
+    "li_note": ("信号ごとの読み出し間隔を設定します(毎回 / 0.1s〜10s / 無視＝読まない)。1要求=最大6PID。\n「毎回」の項目を6個以内にすると、回転数など速いPIDの更新が最速になります。",
+                "Set how often each signal is read (every cycle / 0.1s-10s / Ignore = not read). Up to 6 PIDs per request.\nKeep the 'every cycle' items within 6 for the fastest RPM update."),
+    "li_follow": ("※表示中マップの軸に使う信号(回転・絶対負荷・水温・アクセル等)は、「無視」や遅い設定にしていてもMAP追従のため自動で読みます。ライブRAM(Mode23)は1周期に2ブロックまで、遅れの大きい順に読みます。",
+                  "Note: signals used as axes of the open map (RPM, abs load, ECT, pedal...) are read automatically for map following even if set to Ignore or a slow interval. Live RAM (Mode23) reads up to 2 blocks per cycle, most-overdue first."),
     "li_every": ("毎回", "Every cycle"),
     "li_estimate": ("毎回: {n}項目 → 定常 {req} 要求/周期", "Every cycle: {n} PIDs -> {req} request(s)/cycle"),
     "li_apply": ("適用", "Apply"),
@@ -1367,8 +1643,8 @@ UI = {
     "li_reset": ("既定に戻す", "Reset to defaults"),
     "li_saved": ("保存しました。次回のLive接続から有効です(接続中なら即時反映)。", "Saved. Applies from the next Live connection (immediately if connected)."),
     "range_title": ("入力値エラー", "Value error"),
-    "extra_note": ("✓ 追加項目(LibreTuner定義には無い。ncecu/flatshift.py で定義)。番地と意味は逆アセンブル＋エミュレータで確認済み。範囲外の入力は受け付けません。",
-                   "✓ Extra item (not in the LibreTuner definition; defined in ncecu/flatshift.py). Address and meaning verified by disassembly + emulator. Out-of-range input is rejected."),
+    "extra_note": ("✓ 追加項目(LibreTuner定義には無い。ncecu のパッチモジュールで定義)。番地と意味は逆アセンブル＋エミュレータで確認済み。範囲外の入力は受け付けません。",
+                   "✓ Extra item (not in the LibreTuner definition; defined in an ncecu patch module). Address and meaning verified by disassembly + emulator. Out-of-range input is rejected."),
     "range_msg": ("この項目は {lo:g}〜{hi:g} の範囲で入力してください。入力値 {v:g} は範囲外です。元に戻します。",
                   "This item accepts {lo:g} to {hi:g}. Value {v:g} is out of range. Reverting."),
     "axis_mono_title": ("軸の値エラー", "Axis value error"),
@@ -1376,6 +1652,27 @@ UI = {
                       "隣接値: 左={lo} / 右={hi}\n入力値 {v} は範囲外です。元に戻します。",
                       "Axis values must be strictly ascending.\n"
                       "Neighbors: left={lo} / right={hi}\nValue {v} is out of range. Reverting."),
+    "menu_chart": ("ログ分析チャート…", "Log analysis chart…"),
+    "menu_patches": ("パッチ適用", "Apply patches"),
+    "menu_dtc_clear": ("DTCクリア（故障コード消去）…", "Clear DTCs…"),
+    "dtc_title": ("DTCクリア", "Clear DTCs"),
+    "dtc_confirm": ("ECUの故障コード(DTC)を消去します。\n未修理の異常があれば再度立ちます。実行しますか?",
+                    "Clear the ECU's stored diagnostic trouble codes (DTCs).\n"
+                    "Codes for unresolved faults will reappear. Proceed?"),
+    "dtc_ok": ("DTCを消去しました(応答 0x44)。", "DTCs cleared (response 0x44)."),
+    "dtc_nak": ("消去できませんでした(応答: {resp})。", "Could not clear (response: {resp})."),
+    "dtc_err": ("通信エラー: {err}", "Communication error: {err}"),
+    "dtc_timeout": ("応答がありませんでした(タイムアウト)。", "No response (timeout)."),
+    "dtc_before_after": ("消去前: {before}\n消去後: {after}", "Before: {before}\nAfter: {after}"),
+    # CAN接続(WSL2/socketcan 実行時のみ表示)
+    "menu_can_connect": ("CAN接続（WSL/socketcan）…", "CAN connection (WSL/socketcan)…"),
+    "can_title": ("CAN接続（WSL2 / socketcan）", "CAN connection (WSL2 / socketcan)"),
+    "can_reconnect": ("再接続（attach + can0 up）", "Reconnect (attach + can0 up)"),
+    "can_refresh": ("状態を更新", "Refresh"),
+    "can_close": ("閉じる", "Close"),
+    "can_reconnecting": ("再接続中…", "Reconnecting…"),
+    "can_hint": ("USBを挿し直した／can0 が落ちたときは［再接続］で復旧できます。",
+                 "If you reconnected the USB or can0 went down, use [Reconnect] to recover."),
 }
 
 
@@ -1388,6 +1685,8 @@ def ui(key: str) -> str:
 
 # カテゴリごとの「値を変えると何が変わるか」(効果)。チューニングの勘所。
 CATEGORY_EFFECT = {
+    "WIP - Fuel Comp Cut Pattern (RE)": "値↑=気筒カットによるトルク低減中に燃料が増える(濃くなる)。CAN のトルク上限要求が来なければ使われない。変更しない。",
+    "WIP - DBW Torque Coordinator (RE)": "トルク要求・目標スロットル・振動抑制の特性。(Control) 付きは監視側の写しと必ず同じ値にする。帯域フィルタの係数は計算で決まる組なので個別に変えない。",
     "DBW - Throttle Duty Desired": "値↑=同じアクセル開度でスロットルを大きく開く(レスポンス敏感・ツキが鋭く)/値↓=穏やかに。踏み量とパワーの出方が変わります。",
     "DBW - Throttle Duty Limits": "スロットル開度の上限が変わります。上げすぎ注意(保護項目)。",
     "Engine Limiters - RPM": "値↑=レブリミット(燃料/点火カット回転数)が上がる/値↓=下がる。上げる場合はエンジンの許容回転に注意。",
@@ -1409,22 +1708,27 @@ CATEGORY_EFFECT = {
     "Spark Base": "基本点火時期。値↑(進角)=トルク/燃費向上だがノックのリスク増/値↓(遅角)=安全側だが出力低下。最重要・慎重に。",
     "Spark Base Comp - ECT / IAT": "温度による点火補正。高温時に遅角を強める等で保護。",
     "Spark Base Limit": "点火進角の上限。安全マージン。上げすぎるとノック保護が効きにくくなる。",
-    "Spark Correction - Knock Retard": "ノック検出時の遅角量。値↑=保護を強める(安全)/値↓=出力維持だがノックリスク。",
+    "Spark Correction - Knock Retard": "表ごとに向きが違う。遅角量(KR Increment / Maximum)は 値↑=保護が強い。復帰の速さ(KR Decrement Rate)は 値↑=早く進角に戻る=保護が弱い。監視範囲(Knock Listen の回転・負荷)は範囲を狭めるほどノックを見ない領域が増える。Delay は値↑=復帰が遅い。",
     "Spark Correction - Cold Advance": "冷間時の進角補正。暖機性能に影響。",
     "Spark Correction - Tip-In Retard": "加速時の遅角。加速時ノック対策。",
     "Idle Speed": "目標アイドル回転数。値↑=アイドル高め/値↓=低め(低すぎるとストール)。",
     "Ignition Coil Dwell Time": "点火コイル通電時間。コイル交換時に合わせる。長すぎはコイル発熱、短すぎは失火。",
     "Variable Cam Timing - Base": "可変バルブタイミングの目標角。トルクの出方(低速/高速寄り)が変わります。",
-    "Engine Fan Control": "電動ファンの作動水温しきい値。値↓=早く回り冷えやすい/値↑=遅く回る。",
+    "Engine Fan Control": "水温しきい値(A/D値)は 値↑=低い水温で回り始める(早く回る)/値↓=高い水温まで回らない。℃とは向きが逆。車速しきい値・タイマは値そのまま。",
+    "Spark Base - High Fuel Request Transition": "しきい値↑=高燃料要求側の点火マップへ切り替わりにくくなる/↓=切り替わりやすくなる。進角量は変わらない。",
+    "Fuel Target OL - Base": "値はストイキに対する増量%(0=ストイキ)。値↑=濃い(リッチ)=安全・出力寄り/値↓=薄い(高負荷では危険)。変更はワイドバンドAFRの実測とセットで。",
+    "Fuel IPW - Dynamic Trim Mult A (Large)": "加減速時の過渡(壁流れ)補償の係数。定常の空燃比ではなく、アクセルを踏んだ/戻した瞬間の濃い・薄いが変わる。基本は純正のまま。",
+    "Fuel IPW - Dynamic Trim Mult B (Small)": "加減速時の過渡(壁流れ)補償の係数。定常の空燃比ではなく、アクセルを踏んだ/戻した瞬間の濃い・薄いが変わる。基本は純正のまま。",
+    "Fuel IPW - Dynamic Trim Mult C": "加減速時の過渡(壁流れ)補償の倍率。値↑=過渡の補償量が増える。定常の空燃比は変わらない。基本は純正のまま。",
     "Vehicle Instrument Cluster - Speedometer": "スピードメーターの表示補正。タイヤ外径変更時に実速度へ合わせる(表示のみ・制御には影響小)。",
     "Vehicle Instrument Cluster - ECT Gauge": "水温計の針の表示特性。実際の水温や制御は変わりません(見た目のみ)。",
     "Patch - Immobilizer": "イモビライザー(盗難防止)のバイパス設定。中古ECU流用時に『patched』値へ変えると照合を無効化できます。取扱注意・自己責任。",
     "Patch - Decel Fuel Cut Off": "減速燃料カットの改変。",
-    "Patch - Flat Shift Ignition Retard": "リタード量↑=シフト中のトルク低下が大きい(回転の吹け上がりを抑える)が排気温度↑。回転しきい値↓=早めに効く。アクセル開度しきい値↓=浅い踏み込みでも発動(誤作動リスク↑)。車速下限↑=低速では効かない。",
+    "Patch - Flat Shift": "方式0=点火遅角(穏やか。遅角量↑でトルク低下大・下限↓で大遅角)/1=本物の点火カット(発動中コイル充電停止=火花なし。生ガスで排気バックファイア/高EGT)。発動はクラッチ踏込＋ゲート成立の間だけ(窓時間はクラッチ操作で決まる)。回転/アクセルしきい値↓=早め/浅い踏込でも発動(誤作動リスク↑)。回転しきい値は上限としても働く。車速下限↑=低速では効かない。RAM非書込・窓なし。test_mode=1は車速ゲートだけ無視=停車確認専用(始動/アイドルは不発、停車Nで回転を上げると発動。走行前に0へ)。",
     "Patch - Open Loop Short Term Fuel Trim Fix": "開ループ短期補正の修正パッチ。",
 }
 
-_EFFECT_FALLBACK = "このマップの値を変えると上記カテゴリの挙動が変化します。意味が分からない場合は変更しないでください(センサ特性や診断系は特に注意)。"
+_EFFECT_FALLBACK ="このマップの値を変えると上記カテゴリの挙動が変化します。意味が分からない場合は変更しないでください(センサ特性や診断系は特に注意)。"
 
 # グループ単位の効果フォールバック(LibreTuner カテゴリ向け)
 GROUP_EFFECT = {
@@ -1443,13 +1747,13 @@ GROUP_EFFECT = {
     "Idle Speed": "値↑=アイドル高め/値↓=低め(低すぎるとストール)。",
     "Engine Sensors": "センサの読み(特性)。実際とズレると制御全体がズレる。センサ/吸気系変更時のみ、計測に基づき調整。",
     "Engine Limiters": "レブリミット/速度リミッタ。上げる場合はエンジン・駆動系の許容に注意。",
-    "Engine Fan Control": "値↓=ファンが早く回り冷えやすい/値↑=遅く回る。",
+    "Engine Fan Control": "水温しきい値(A/D値)は 値↑=低い水温で回り始める(早く回る)/値↓=高い水温まで回らない。℃とは向きが逆。車速しきい値・タイマは値そのまま。",
     "Variable Cam Timing": "可変バルブタイミングの目標角。トルクの出方(低速/高速寄り)が変わる。",
     "Ignition Coil Dwell Time": "点火コイル通電時間。長すぎはコイル発熱、短すぎは失火。コイル交換時に合わせる。",
     "Patch": "ROM改変。イモビ無効・排気量変更など効果は項目ごとに大きく異なる。取扱注意・自己責任。",
     "Data Integrity Checks": "フェイルセーフ判定。むやみに変えると保護が誤作動/無効化される恐れ。基本は変更しない。",
     "Data Integrity Thresholds": "保護判定のしきい値。基本は変更しない。",
-    "DTC Thresholds": "DTC(警告灯)を立てるしきい値。誤検知や不要な警告灯の調整に使う。",
+    "DTC Thresholds": "DTC(故障コード)の判定しきい値。診断と保護のための値なので変更しない。",
 }
 
 

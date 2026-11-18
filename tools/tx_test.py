@@ -23,6 +23,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from ncecu.canbus import open_bus          # noqa: E402
 from ncecu.diag import DiagClient, NegativeResponse  # noqa: E402
+from ncecu.flash import realtime_guard     # noqa: E402
 from ncecu.isotp import IsoTp, IsoTpError  # noqa: E402
 
 LOG_DIR = pathlib.Path(__file__).resolve().parents[1] / "logs"
@@ -36,6 +37,8 @@ def main() -> None:
     ap.add_argument("--retries", type=int, default=5)
     ap.add_argument("--no-drain", action="store_true", help="TXエコー吸い出しを無効化(比較用)")
     ap.add_argument("--drain-every", type=int, default=8, help="何フレーム毎にエコー吸い出し(小=安全/遅, 大=速い)")
+    ap.add_argument("--no-guard", action="store_true",
+                    help="realtime_guard(タイマ1ms+高優先度)を使わない。既定は使う=実フラッシュと同条件")
     args = ap.parse_args()
     size = max(8, min(args.size, 0xFFF))   # 単一 ISO-TP メッセージ上限 0xFFF
     lines: list[str] = []
@@ -53,27 +56,44 @@ def main() -> None:
         out(f"size={size} (0x{size:X}) count={args.count} floor={args.floor}s "
             f"retries={args.retries} drain={not args.no_drain} drain_every={args.drain_every}")
         out("（SID 0x22 + ゼロ詰め = 読み取り要求。ECUは再構成後にNRCで弾くだけ=副作用なし）")
+        out(f"realtime_guard={'OFF' if args.no_guard else 'ON(実フラッシュと同条件)'}")
         ok = 0
-        for i in range(args.count):
-            payload = bytes([0x22]) + bytes(size - 1)   # 0x22 + (size-1) ゼロ
-            t0 = time.monotonic()
-            try:
-                r = diag.request(payload, timeout=5.0)
-                dt = (time.monotonic() - t0) * 1000
-                rs = r.hex(" ")[:30] if r else "(no resp)"
-                out(f"  #{i + 1:>2}: OK  送信完了+応答 {dt:6.0f}ms  resp={rs}")
-                ok += 1
-            except NegativeResponse as e:
-                dt = (time.monotonic() - t0) * 1000
-                out(f"  #{i + 1:>2}: OK  送信完了(ECUがNRCで応答) {dt:6.0f}ms  {e}")
-                ok += 1
-            except IsoTpError as e:
-                dt = (time.monotonic() - t0) * 1000
-                out(f"  #{i + 1:>2}: FAIL 送信失敗 {dt:6.0f}ms  IsoTpError: {e}")
-            except Exception as e:  # noqa
-                dt = (time.monotonic() - t0) * 1000
-                out(f"  #{i + 1:>2}: FAIL 送信失敗 {dt:6.0f}ms  {type(e).__name__}: {e}")
+        times = []   # OK送信の所要ms(速度集計用)
+        import contextlib
+        guard = contextlib.nullcontext() if args.no_guard else realtime_guard(out)
+        with guard:
+            for i in range(args.count):
+                payload = bytes([0x22]) + bytes(size - 1)   # 0x22 + (size-1) ゼロ
+                t0 = time.monotonic()
+                try:
+                    r = diag.request(payload, timeout=5.0)
+                    dt = (time.monotonic() - t0) * 1000
+                    rs = r.hex(" ")[:30] if r else "(no resp)"
+                    out(f"  #{i + 1:>2}: OK  送信完了+応答 {dt:6.0f}ms  resp={rs}")
+                    ok += 1
+                    times.append(dt)
+                except NegativeResponse as e:
+                    dt = (time.monotonic() - t0) * 1000
+                    out(f"  #{i + 1:>2}: OK  送信完了(ECUがNRCで応答) {dt:6.0f}ms  {e}")
+                    ok += 1
+                    times.append(dt)
+                except IsoTpError as e:
+                    dt = (time.monotonic() - t0) * 1000
+                    out(f"  #{i + 1:>2}: FAIL 送信失敗 {dt:6.0f}ms  IsoTpError: {e}")
+                except Exception as e:  # noqa
+                    dt = (time.monotonic() - t0) * 1000
+                    out(f"  #{i + 1:>2}: FAIL 送信失敗 {dt:6.0f}ms  {type(e).__name__}: {e}")
         out(f"\n結果: {ok}/{args.count} 送信成功")
+        if times:
+            avg = sum(times) / len(times)
+            kibs = size / (avg / 1000) / 1024 if avg else 0
+            frames = (size + 6) // 7 + 1   # FF1 + CF群の概算
+            full_blocks = 0xFF800 // 0x400  # フル書込の0x400ブロック数(≒1022)
+            est = avg * full_blocks / 1000
+            out(f"[速度] 1メッセージ平均 {avg:.0f}ms  {kibs:.2f}KiB/s  (~{frames}フレーム/msg, floor={args.floor}s)")
+            out(f"       フル書込TX推定(≒{full_blocks}ブロック) ≒ {est:.0f}s  "
+                f"※これは送信のみ。実フラッシュは各ブロックのECU書込待ちが加算される")
+            out("       → floor を下げて再試行し、OKを保ったまま ms/KiB-s が改善する下限を探す。")
         if ok == args.count:
             out("→ この設定で大容量TXは安定。フラッシュ再試行の見込みが立つ(同設定が flash.py の既定)。")
         elif ok == 0:

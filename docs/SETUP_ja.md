@@ -9,7 +9,7 @@ Mazda MX-5 **NC(NCEC / LF-VE / Denso・Renesas SH7058 PCM)** の純正ECUを
 
 > 📦 **このパッケージが「完全版」(ファイル名 `..._full_...`)の場合**:ROMダンプ・LibreTuner定義・
 > SBL も**すべて同梱済み**です。→ **第4節(各自用意)はスキップ**して、第2節(pip)→第3節(ドライバ)→
-> 第5節(`python ncec_editor.py`)だけで、起動時に `ncec_rom_dump.bin` と `defs/libretuner/` を自動読込します。
+> 第5節(`NCEC_ROM_Editor.bat`)だけで、起動時に `rom_data/ecu_readout_yahooauction.bin` と `defs/libretuner/` を自動読込します。
 > (個人利用・自分の別PCへの移行用。第三者への再配布時は著作権/ライセンスに注意)
 
 ---
@@ -50,12 +50,13 @@ gs_usb は **libusb** 経由で動くため、SH-C30L に **WinUSB(libusb)** ド
 | もの | 置き場所 | 入手 |
 |---|---|---|
 | **LibreTuner mx5_nc 定義** | `defs/libretuner/main.json`<br>`defs/libretuner/LFG7EG.json` | github.com/LibreTuner/LibreTuner の `ui/resources/definitions/mx5_nc/`(**GPL。ライセンス順守**) |
-| **ECUダンプ** | ルートの `ncec_rom_dump.bin` | 自分のECUをエディタ「ECU吸出し」でダンプ、または手持ちの吸い出し |
+| **ECUダンプ(ROM)** | `rom_data/` フォルダ | 自分のECUをエディタ「ECU吸出し」でダンプ、または手持ちの吸い出し。ROMはすべてここに置く |
 | **SBL(書込み用, 0x1800)** | 任意の場所(書込み時に選択) | 自分の環境で用意 |
 
 - `defs/libretuner/` が無い場合、エディタは古いXML定義にフォールバックしますが、
   **LibreTuner定義のほうがこの個体の表レイアウトが正確**です(推奨)。
-- `ncec_rom_dump.bin` が無くても起動はできますが、ROMを[開く]から読み込むか「ECU吸出し」で作成してください。
+- `rom_data/` にROMが無くても起動はできます。ROMを[開く]から読み込むか「ECU吸出し」で作成してください。
+  起動時に自動で開くのは `rom_data/ecu_readout_yahooauction.bin`(あれば)です。
 
 ## 5. 起動と基本操作
 
@@ -82,24 +83,24 @@ python ncec_editor.py
 - **[記録 ●]** Live中のロギング(`logs/*.jsonl`、ポーリング周期ごとの高精度)→ **[リプレイ]** で再生(ダッシュ+●が動く)
 - **[ECU吸出し] / [ECUと照合] / [ROM照合]** 比較系
 - **[ECU書き込み]** 編集ROMを実機へ(※下記の注意)
-- 操作ヘルプは **[ヘルプ]** ボタン(`docs/editor_help_ja.md`)
+- 操作ヘルプは **[ヘルプ]** ボタン。そこから統合マニュアル(`docs/map_analysis_JA.html`)も開けます
+- マップの検索は名前のほか **`0x` で始まる番地**でも可(例 `0xD6CDC`)
 
 ## 6. 付属ドキュメント(docs/)
 
-- `map_analysis.html` / `map_analysis_JA.html` … 全マップ解析(フローチャート付き・そのままブラウザで開ける)
-- `ecu_diff_report.html` … 実車 vs ベンチ の差分レポート
-- `map_editor_manual.pdf` / `map_editor_manual_EN.pdf` … 取扱説明(PDF)
-- `can_flash_ready_ja.md` … CAN書き込みの前提と手順
+- **`map_analysis_JA.html`(日本語) / `map_analysis.html`(English) … 統合マニュアル**。導入・使い方・
+  チューニング機能・書き込み・解析メモ・全マップ解析を1本にまとめた目次付きの文書(ブラウザで開く)。
+  まずこれを開いてください。個別の `.md` はその元原稿です。
+- `map_editor_manual.pdf` / `map_editor_manual_EN.pdf` … 取扱説明(PDF)。ROM の値を含むので公開リポジトリには入れていない。`python tools/gen_manual.py`(英語版は `--lang en`)で自分の ROM から作る
 - `editor_help_ja.md` … エディタ操作(アプリ内ヘルプと同じ)
-- `unit_fixes_i18n.md` / `table_audit_ja.md` / `SH7058_hardware_notes.md` / `diag_findings.md` ほか
 
 ## 7. 書き込み(フラッシュ)の注意
 
 - **消去を伴う不可逆操作・ブリックの実リスク**。必ず**予備/ベンチECU**で。
-- 電源を安定させ、**書き込み中(約10分)は抜線・電源断をしない**。
+- 電源を安定させ、**書き込み中は抜線・電源断をしない**(Windows直結で約10分。WSL2経由なら大幅に短い＝「WSL2導入」の章)。
 - 書込みには **SBL(0x1800, NC1)** が必要([ECU書き込み]でファイル選択)。
 - **最初は無改変の読み戻し**(同じROMを書いて CALID/CVN が前後一致)で健全性を確認してから、編集ROMへ。
-- 編集ROMを焼くと **CVNは変化するのが正常**(校正が変わった証拠)。純正に戻すには元の `ncec_rom_dump.bin` を焼く。
+- 編集ROMを焼くと **CVNは変化するのが正常**(校正が変わった証拠)。純正に戻すには `rom_data/` に残した吸い出し原本を焼く。
 
 ## 8. トラブルシュート
 
@@ -107,7 +108,8 @@ python ncec_editor.py
   → **SH-C30L のUSBを抜き挿し**、Liveを停止、端末で動作中のCAN系ツール(probe/tx_test/flash_writeback)や2つ目のエディタを終了、エディタ再起動。
 - **Live 接続失敗**:WinUSBドライバ(手順3)・ECU電源・通常セッションを確認。
 - **値が全部 `--` / 反応なし**:ECU電源、500kbps、配線、要求0x7E0/応答0x7E8。
-- **Live更新が遅い**:Liveパネル1行目の `● X.X Hz` を確認。二桁なら正常(マルチPID対応)。数Hzなら非対応ECU。
+- **Live更新が遅い**:Liveパネル1行目の `● X.X Hz` を確認。「設定 → ライブPID間引き…」で使わない信号を**無視**にすると速くなる
+  (「毎回」を6個以内に。ライブRAMの項目が多いほど遅くなる)。数Hzから上がらなければマルチPID非対応ECU。
 
 ---
 

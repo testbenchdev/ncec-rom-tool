@@ -13,7 +13,8 @@ class IsoTp:
                  pad: int = 0x00, timeout: float = 1.0,
                  rx_block_size: int = 0x10, rx_st_min: int = 0x00,
                  tx_st_min_floor: float = 0.001, tx_retries: int = 5,
-                 drain_tx_echo: bool = True, drain_every: int = 8):
+                 drain_tx_echo: bool = True, drain_every: int = 8,
+                 flush_timeout: float = 0.0):
         self.bus = bus
         self.tx_id = tx_id
         self.rx_id = rx_id
@@ -42,6 +43,14 @@ class IsoTp:
         # rx_st_min: 連続フレームの最小間隔(0x00-0x7F=ms, 0xF1-0xF9=100-900us)。
         self.rx_block_size = rx_block_size
         self.rx_st_min = rx_st_min
+        # 後方互換のため受け取るのみ(現在は未使用)。flush() は can_filters の有無に
+        # 関わらず「空になるまで読み切る」ハードドレインに統一したため、タイムアウト方式の
+        # 切替は不要になった(劣化の原因だったので廃止)。詳細は flush() を参照。
+        self.flush_timeout = flush_timeout
+        # 条件付き flush の状態。True=直前トランザクションが異常(タイムアウト/フレーム異常/
+        # 送信失敗)で掃き残しの恐れ→次 flush でハードドレイン。False=クリーン完了→高速パスで
+        # ハードドレインを省略(フィルタ有りバス限定)。初回は True(電源投入直後のノイズを掃く)。
+        self._needs_drain = True
 
     # ---- 低レベル ----
     def _send_frame(self, data: bytes) -> None:
@@ -56,6 +65,7 @@ class IsoTp:
             except can.CanError as e:
                 last = e
                 time.sleep(0.002 * (attempt + 1))
+        self._needs_drain = True
         raise IsoTpError(f"frame send failed after {self.tx_retries} retries: {last}")
 
     def _drain(self) -> None:
@@ -85,9 +95,43 @@ class IsoTp:
     def flush(self) -> None:
         # バス上の残フレームに加え、送信中にバッファした受信フレーム(_rxbuf)も破棄する。
         # これを消さないと前トランザクションの残りが次要求の応答として誤読される。
+        #
+        # ハードドレイン: recv(0)(=即時に取れるフレームが無ければ None)を空になるまで
+        # 読み切る。バスの一過性の詰まり(GC/GIL/OSスケジューリング)で受信キューが膨れても、
+        # 毎回これで空へ戻す自己修復動作になる。
+        # ⚠ can_filters を適用したバスでは recv(0) が非マッチフレームで即 None を返し、奥に
+        #    残る古いフレームを消し損ねる。残留が周期ごとに積み上がってライブ更新レートが
+        #    徐々に低下し(再接続でのみ回復)、本来不要な劣化を生む。ドレイン中だけソフト
+        #    フィルタを外して全フレームを読み切る(rx_id の選別は _recv_frame が自前で行う
+        #    ので、フィルタを外しても応答の取り違えは起きない)。
+        #
+        # 高速パス(フィルタ有りバス=ライブ監視限定): 直前トランザクションがクリーンに完了して
+        # いれば(_needs_drain=False)、重いハードドレインを省いて _rxbuf クリアのみで返す。
+        # 正常時に残るのは自局TXエコー(0x7E0)程度で、次 recv の際に python-can がC側ループで
+        # まとめて捨てるため積み上がらない。まれな掃き残し(ECUの重複/遅延応答など)は recv が
+        # フレーム異常/タイムアウトとして検知し _needs_drain を立てるので、次回ハードドレインで
+        # 確実に回収される。フィルタ無しバス(書込み系)は従来どおり毎回ハードドレイン(保守的)。
         self._rxbuf.clear()
-        while self.bus.recv(0) is not None:
-            pass
+        bus = self.bus
+        saved = getattr(bus, "_filters", None)   # None=フィルタ無し(書込み系など)
+        if saved and not self._needs_drain:
+            return                                # クリーン完了→省略(高速パス)
+        self._needs_drain = False
+        try:
+            if saved:
+                bus.set_filters(None)
+        except Exception:  # noqa: BLE001
+            saved = None
+        try:
+            for _ in range(4096):          # 飽和バスでの過剰ドレイン防止の安全弁
+                if bus.recv(0) is None:
+                    break
+        finally:
+            if saved:
+                try:
+                    bus.set_filters(saved)
+                except Exception:  # noqa: BLE001
+                    pass
 
     # ---- 送信 ----
     def send(self, payload: bytes) -> None:
@@ -120,6 +164,7 @@ class IsoTp:
         while True:
             fr = self._recv_frame(self.timeout)
             if fr is None:
+                self._needs_drain = True
                 raise IsoTpError("flow control timeout")
             if fr[0] >> 4 != 3:
                 continue
@@ -127,6 +172,7 @@ class IsoTp:
             if fs == 1:  # WAIT
                 continue
             if fs == 2:
+                self._needs_drain = True
                 raise IsoTpError("flow control overflow")
             st = fr[2]
             st_min = st / 1000 if st <= 0x7F else (st - 0xF0) / 10000 if 0xF1 <= st <= 0xF9 else 0.127
@@ -136,11 +182,13 @@ class IsoTp:
     def recv(self, timeout: float | None = None) -> bytes | None:
         fr = self._recv_frame(self.timeout if timeout is None else timeout)
         if fr is None:
+            self._needs_drain = True       # 無応答=掃き残しの恐れ→次flushで全掃き
             return None
         pci = fr[0] >> 4
         if pci == 0:
             return fr[1:1 + (fr[0] & 0x0F)]
         if pci != 1:
+            self._needs_drain = True
             raise IsoTpError(f"unexpected frame {fr.hex(' ')}")
         n = ((fr[0] & 0x0F) << 8) | fr[1]
         data = bytearray(fr[2:8])
@@ -153,10 +201,12 @@ class IsoTp:
         while len(data) < n:
             cf = self._recv_frame(self.timeout)
             if cf is None:
+                self._needs_drain = True
                 raise IsoTpError("consecutive frame timeout")
             if cf[0] >> 4 != 2:
                 continue
             if cf[0] & 0x0F != expect_sn:
+                self._needs_drain = True
                 raise IsoTpError("sequence number mismatch")
             data += cf[1:8]
             expect_sn = (expect_sn + 1) & 0x0F

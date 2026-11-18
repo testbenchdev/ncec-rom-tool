@@ -34,7 +34,7 @@
 ## 生成（コマンドライン）
 
 ```
-python tools/patch_throttle_1to1.py --base ncec_immo_off.bin --out ncec_immo_off_throttle1to1.bin
+python tools/patch_throttle_1to1.py --base rom_data/<元のROM>.bin --out rom_data/<出力>.bin
 ```
 
 - オプション：`--blend 0.7`（純正寄せ）、`--cap-margin 10`（上限引き上げ[%]）、`--keep-idle 2`（アイドル直上の列を純正のまま残す）。
@@ -48,7 +48,7 @@ python tools/patch_throttle_1to1.py --base ncec_immo_off.bin --out ncec_immo_off
 - 適用後、**変更した map データ（全ギアのペダルマップ 制御/監視＋指令上限）をリザルト表示**します。
 - メモリ上のROMだけ変更（保存するまでファイルは不変、保存時にチェックサム自動補正）。生成結果は内部で自己検証（制御==監視・値・上限内・チェックサム）。
 
-同梱例 **`ncec_immo_off_throttle1to1.bin`** = 実車運用中の `ncec_immo_off.bin` に 1:1（blend=1.0 / cap_margin=10）を適用（差分2416バイト、チェックサム valid、**イモビ無効設定は保持**）。
+適用例（過去の実績値）= 当時の運用ROMに 1:1（blend=1.0 / cap_margin=10）を適用 → 差分2416バイト、チェックサム valid、元ROMの他の設定は保持。
 
 ### 1:1化後の各ギア row0（低回転）
 

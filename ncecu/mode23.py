@@ -87,3 +87,31 @@ _SIZE = {"u8": 1, "u16": 2, "s16": 2, "u32": 4, "s32": 4, "f32": 4}
 
 def type_size(typ: str) -> int:
     return _SIZE[typ]
+
+
+def group_channels(channels, max_span: int = 64):
+    """ライブRAMチャンネルを隣接ブロックへまとめる(往復回数の削減用)。
+
+    返り値は [{start, size, members:[(channel, offset), ...]}, ...]。
+    1ブロック = 1回の `23 <start> <size>` 読みで、members 全chを offset で切り出せる。
+    まとめ条件: ブロック先頭からの総スパンが max_span 以下、かつ Mode23 読み出し可能範囲
+    (addr_readable)。max_span を小さく保つと巨大なマルチフレーム読みを避けられる
+    (既定64B: 隣接する番地は1読みにまとまり、離れた番地は単独読みのまま。例: ノックレベル0xFFFF4E20は単独、
+     KR 0xFFFF7C44 は7Cxx帯で他と相乗りしうる)。"""
+    items = []
+    for c in channels:
+        size = type_size(c.get("type", "u8"))
+        items.append((c["addr"], size, c))
+    items.sort(key=lambda t: t[0])
+    groups: list[dict] = []
+    for addr, size, c in items:
+        if groups:
+            g = groups[-1]
+            new_end = max(g["start"] + g["size"], addr + size)
+            span = new_end - g["start"]
+            if addr >= g["start"] and span <= max_span and addr_readable(g["start"], span):
+                g["size"] = span
+                g["members"].append((c, addr - g["start"]))
+                continue
+        groups.append({"start": addr, "size": size, "members": [(c, 0)]})
+    return groups

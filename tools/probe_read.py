@@ -9,7 +9,7 @@ from ncecu.diag import DiagClient, NegativeResponse  # noqa: E402
 from ncecu.isotp import IsoTp  # noqa: E402
 from ncecu.security import compute_security_key  # noqa: E402
 
-ROM = (pathlib.Path(__file__).resolve().parents[1] / "ncec_rom_dump.bin").read_bytes()
+ROM = (pathlib.Path(__file__).resolve().parents[1] / "rom_data" / "ecu_readout_yahooauction.bin").read_bytes()
 
 
 def unlock(diag, ses=0x85):

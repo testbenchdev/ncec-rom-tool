@@ -4,7 +4,7 @@
 本体ロジックは ncecu/dbw_throttle.py（対象アドレス・方式・注意はそちら）。
 
 使い方:
-  python tools/patch_throttle_1to1.py --base ncec_immo_off.bin --out ncec_immo_off_throttle1to1.bin
+  python tools/patch_throttle_1to1.py --base rom_data/<元のROM>.bin --out rom_data/<出力>.bin
   python tools/patch_throttle_1to1.py --base X.bin --out Y.bin --blend 0.7 --cap-margin 10 --keep-idle 2
 """
 import argparse
@@ -20,8 +20,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--base", default=str(ROOT / "ncec_immo_off.bin"))
-    ap.add_argument("--out", default=str(ROOT / "ncec_immo_off_throttle1to1.bin"))
+    ap.add_argument("--base", default=str(ROOT / "rom_data" / "ecu_readout_yahooauction.bin"))
+    ap.add_argument("--out", default=str(ROOT / "rom_data" / "throttle1to1_out.bin"))
     ap.add_argument("--blend", type=float, default=1.0, help="0=純正〜1=完全1:1 (既定1.0)")
     ap.add_argument("--cap-margin", type=float, default=10.0,
                     help="指令上限の引き上げ[%%] 監視の誤フォルト防止 (既定10)")

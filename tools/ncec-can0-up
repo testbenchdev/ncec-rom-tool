@@ -1,0 +1,36 @@
+#!/bin/sh
+# NCEC: can0 を 500kbps で冪等に起動する(root権限で実行)。
+# setup_ncec_wsl.sh が CR除去のうえ /usr/local/sbin/ncec-can0-up へ複製し、
+# 対象ユーザーに NOPASSWD sudoers を張る。これにより GUI(一般ユーザー)から
+#   sudo -n /usr/local/sbin/ncec-can0-up
+# でパスワード無しに can0 を再接続できる(docs/setup_wsl_ja.md)。
+#
+# 実車の稼働中HS-CANに予備ECUを載せて書き込むとバスが混み、書き込みバースト(TransferData)が
+# socketcan の送信キューを溢れさせて ENOBUFS(errno 105) になりやすい。対策:
+#   - txqueuelen を拡大 … 混雑で即さばけない送信フレームをキューへ退避し 105 を減らす(最重要)。
+#   - restart-ms       … バスオフ時にカーネルが自動復帰(無いと down→up するまで送信不能)。
+#   - down→up で確実適用 … bitrate/restart-ms は down 状態でのみ変更でき、down→up はバスオフ解除も兼ねる。
+#
+# 引数1(任意)= CANチャンネル名(既定 can0)。
+# 環境変数で調整可: NCEC_CAN_TXQLEN(既定1000), NCEC_CAN_RESTART_MS(既定100)。
+CH="${1:-can0}"
+QLEN="${NCEC_CAN_TXQLEN:-1000}"
+RMS="${NCEC_CAN_RESTART_MS:-100}"
+
+# usbipd attach 済みでないと can0 は存在しない。
+ip link show "$CH" >/dev/null 2>&1 || {
+    echo "ncec-can0-up: $CH not found (usbipd attach not done yet?)" >&2
+    exit 2
+}
+
+# bitrate/restart-ms は down 状態でのみ設定可。down→up はバスオフ(BUS-OFF)解除も兼ねる。
+ip link set "$CH" down 2>/dev/null
+ip link set "$CH" type can bitrate 500000 2>/dev/null
+# restart-ms は bitrate と分けて設定(未対応ドライバでも bitrate を巻き添えにしない)。
+# 注意: gs_usb/candleLight(SH-C30L)はこの設定を未対応でカーネルが弾く(ip -details で restart-ms 0 のまま)。
+# その場合でも上の down→up が毎回バスオフを手動解除するので、復帰は GUI「再接続」/本スクリプト再実行で可。
+ip link set "$CH" type can restart-ms "$RMS" 2>/dev/null
+# txqueuelen は up/down どちらでも可。混雑バスでの ENOBUFS(105) 緩和の要。
+ip link set "$CH" txqueuelen "$QLEN" 2>/dev/null
+ip link set "$CH" up 2>/dev/null
+ip -details link show "$CH"

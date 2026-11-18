@@ -7,6 +7,7 @@
 - メーター/棒はアラーム値に赤い帯(レッドゾーン)を表示。全体がタイル内に収まる(はみ出し対策)
 - ドラッグで移動、右下角でサイズ変更、右クリックでメニュー
 - レイアウト(位置/サイズ/モード/範囲/アラーム/向き)は dashboard_layout.json に保存/復元
+- ウィンドウの位置と大きさ(最大化を含む)は ui_settings.json に保存し、次に開いたときに戻す
 値の供給はエディタ側(LiveReader)から update_values() で渡す(読み取り専用)。
 更新周期の設定/取得はエディタから渡される set_interval/get_interval 経由で LiveReader に反映。
 """
@@ -20,6 +21,10 @@ import time
 import tkinter as tk
 from tkinter import colorchooser
 
+import ncec_popup as popup
+import ncec_uistate as uistate
+from ncecu import livelog
+
 LAYOUT_PATH = pathlib.Path(__file__).resolve().parent / "dashboard_layout.json"
 
 PID_LABEL = {
@@ -31,8 +36,8 @@ PID_LABEL = {
     0x10: ("エアフロ MAF", "g/s", "%.1f"),
     0x11: ("スロットル", "%", "%.0f"),
     0x49: ("アクセル開度", "%", "%.0f"),
-    0x04: ("エンジン負荷", "%", "%.0f"),
-    0x43: ("絶対負荷", "%", "%.0f"),
+    0x43: ("エンジン負荷(絶対)", "%", "%.0f"),    # マップの負荷軸と同じ量。既定で毎回読む
+    0x04: ("計算負荷(重複・既定は無視)", "%", "%.0f"),
     0x0E: ("点火時期", "°", "%.1f"),
     0x42: ("バッテリ電圧", "V", "%.2f"),
     0x0D: ("車速", "km/h", "%.0f"),
@@ -45,11 +50,17 @@ PID_LABEL = {
     0x1F: ("稼働時間", "s", "%.0f"),
     0x101: ("減速ステータス", "", "%.0f"),
     0x107: ("クラッチ", "", "%.0f"),
-    0x102: ("KR(ノック遅角)", "°", "%.1f"),
+    0x10B: ("ブレーキ", "", "%.0f"),
+    0x10C: ("ブレーキ2(重複・既定は無視)", "", "%.0f"),
+    0x108: ("ゲートAPP", "%", "%.0f"),
+    0x109: ("噴射パルス幅", "ms", "%.2f"),
+    0x10A: ("開弁率", "%", "%.0f"),
+    0x10D: ("現在ギア", "", "%.0f"),
+    # ノック系は 2026-11-14 のREで是正(docs/knock_re_ja.md)。監視はレベル(0x114)＋KR(0x106)の2本に集約。
+    0x114: ("ノックレベル", "", "%.2f"),
+    0x106: ("KR(ノック遅角)", "°", "%.2f"),
     0x103: ("排気温(推定)", "°C", "%.0f"),
-    0x104: ("ノックカウント", "", "%.0f"),
-    0x105: ("ノック強度", "", "%.1f"),
-    0x106: ("ノックリタード", "°", "%.1f"),
+    # 0x102/0x104/0x105/0x10E/0x10F はライブ表示から撤去(ユーザー指示「レベルとKRで十分」)。
     "DTC": ("DTC件数", "", "%.0f"),
 }
 CH_RANGE = {
@@ -57,29 +68,40 @@ CH_RANGE = {
     0x10: (0, 150), 0x11: (0, 100), 0x49: (0, 100), 0x04: (0, 100), 0x43: (0, 120),
     0x0E: (-10, 60), 0x42: (10, 16), 0x0D: (0, 200), 0x06: (-20, 20), 0x07: (-20, 20),
     0x15: (0, 1), 0x34: (9, 20), 0x44: (9, 20), 0x2C: (0, 100), 0x1F: (0, 3600),
-    0x101: (0, 1), 0x102: (-15, 5), 0x103: (0, 900), 0x107: (0, 1),
-    0x104: (0, 50), 0x105: (0, 100), 0x106: (0, 15), "DTC": (0, 10),
+    0x101: (0, 1), 0x103: (0, 900), 0x107: (0, 1), 0x108: (0, 100),
+    0x106: (0, 8), 0x114: (0, 5), "DTC": (0, 10),   # 0x106=KR(上限8°)。0x114=レベル(内部スケール・実車で調整)
+    0x109: (0, 16), 0x10A: (0, 100),   # 噴射パルス幅[ms] / 開弁率[%]
+    0x10B: (0, 1), 0x10C: (0, 1),      # ブレーキSW(本命 / 冗長)
+    0x10D: (0, 6),                     # 現在ギア(0=不明/切/停止, 1-6)
 }
-# アラーム: ノックカウントは「成立」しきい値(Minimum Proto-Knock Count=24)で赤
-CH_ALARM = {0x0C: 6800, 0x05: 105, 0x103: 850, 0x102: -3.0, 0x104: 24, 0x106: 5.0}
-LOW_ALARM = {0x102}
+# アラーム: ノックは KR(0x106) が1回ぶんの増分(1.7°)以上で赤＝ノック遅角が入った。
+#   旧設定の 0x104≥24 は誤り(0x104 は始動後燃焼数で走行中は常に255＝常時赤になっていた)、
+#   0x102≤-3 も誤り(0x102 はKRではない)。どちらも撤去。
+CH_ALARM = {0x0C: 6800, 0x05: 105, 0x103: 850, 0x106: 1.5}
+LOW_ALARM = set()
 BIG_SCALE = {0x0C}               # 目盛りを1000で割って ×1000 表記
 
 MODES = ["num", "bar", "gauge", "graph"]
 MODE_LABEL = {"num": "数値", "bar": "棒(バー)", "gauge": "メーター", "graph": "グラフ"}
 GRAPH_SEC = 12.0
-INTERVAL_CHOICES = [(0.0, "毎回"), (0.5, "0.5秒"), (1.0, "1秒"), (2.0, "2秒"),
-                    (5.0, "5秒"), (10.0, "10秒")]
+# 更新周期の選択肢はエディタの「ライブPID間引き」と共通(毎回/0.1s/0.2s/0.5s/1s/2s/5s/10s/無視)。
+INTERVAL_CHOICES = [(sec, livelog.interval_label(sec)) for sec in livelog.INTERVAL_CHOICES]
 
 DEFAULT_LAYOUT = [
     {"ch": 0x0C, "x": 20, "y": 20, "w": 280, "h": 220, "mode": "gauge"},
     {"ch": 0x0D, "x": 310, "y": 20, "w": 150, "h": 100, "mode": "num"},
     {"ch": 0x34, "x": 470, "y": 20, "w": 320, "h": 100, "mode": "bar"},
-    {"ch": 0x04, "x": 310, "y": 130, "w": 110, "h": 230, "mode": "bar"},
+    {"ch": 0x43, "x": 310, "y": 130, "w": 110, "h": 230, "mode": "bar"},    # 負荷(絶対=マップ軸)
     {"ch": 0x11, "x": 430, "y": 130, "w": 110, "h": 230, "mode": "bar"},
     {"ch": 0x0E, "x": 550, "y": 130, "w": 150, "h": 110, "mode": "num"},
     {"ch": 0x05, "x": 710, "y": 130, "w": 150, "h": 110, "mode": "num"},
     {"ch": 0x42, "x": 550, "y": 250, "w": 310, "h": 100, "mode": "bar"},
+    {"ch": 0x109, "x": 20, "y": 250, "w": 120, "h": 100, "mode": "num"},    # 噴射パルス幅[ms]
+    {"ch": 0x10A, "x": 180, "y": 250, "w": 280, "h": 90, "mode": "bar"},    # 開弁率[%]
+    {"ch": 0x10B, "x": 310, "y": 360, "w": 150, "h": 90, "mode": "num"},    # ブレーキSW
+    {"ch": 0x107, "x": 470, "y": 360, "w": 150, "h": 90, "mode": "num"},    # クラッチSW
+    {"ch": 0x108, "x": 630, "y": 360, "w": 150, "h": 90, "mode": "num"},    # ゲートAPP(フラットシフト)
+    {"ch": 0x10D, "x": 20, "y": 360, "w": 150, "h": 90, "mode": "num"},     # 現在ギア(派生)
 ]
 
 BG = "#0e1116"
@@ -120,7 +142,9 @@ class DashboardWindow(tk.Toplevel):
                  get_interval=None, set_interval=None):
         super().__init__(master)
         self.title("ライブ・ダッシュボード")
-        self.geometry("900x380")
+        # 前回の位置と大きさで開く(画面外になる位置は使わない)。動かす/大きさを変えるたびに覚える。
+        uistate.restore_geometry(self, uistate.get("dashboard"), "900x380", 320, 200)
+        self._geo = uistate.GeometryKeeper(self, "dashboard")
         self.configure(bg=BG)
         self.jp = jp
         self.mono = mono
@@ -129,6 +153,7 @@ class DashboardWindow(tk.Toplevel):
         self.values = {}
         self.dtcs = []
         self._drag = None
+        self._menu_win = None   # メニュー表示中は再描画を止める(WSLg点滅対策)
         self._track = {}
         self._hist = {}
         self.tiles = self._load_layout()
@@ -222,15 +247,35 @@ class DashboardWindow(tk.Toplevel):
             return ""
         if not s:
             return ""
-        return f" [{s:g}s]"
+        return f" [{livelog.interval_label(s)}]"     # 例 [0.5s] / [無視]
 
     # ---- アニメーション(約30fps) ----
     def _anim(self):
         try:
-            self._redraw()
+            # メニュー表示中は canvas.delete("all")→再描画を止める。
+            # WSLg では毎フレームの全消去再描画が、重なっているポップアップ
+            # (tk.Menu の枠なし窓)を覆い直して点滅させるため。メニューが
+            # 閉じたら(未マップ/消滅)自動で再開する(<Unmap> 不発でも自己回復)。
+            if self._menu_blocking():
+                pass
+            else:
+                self._redraw()
         except tk.TclError:
             return
         self._anim_after = self.after(33, self._anim)
+
+    def _menu_blocking(self):
+        """メニューが実際に画面に出ている間だけ True(出ていなければ解除)。"""
+        m = self._menu_win
+        if m is None:
+            return False
+        try:
+            if m.winfo_exists() and m.winfo_ismapped():
+                return True
+        except tk.TclError:
+            pass
+        self._menu_win = None
+        return False
 
     def _redraw(self):
         c = self.canvas
@@ -318,9 +363,13 @@ class DashboardWindow(tk.Toplevel):
         lo, hi = _rng(ch, t)
         a = _alarm_of(ch, t)
         low = ch in LOW_ALARM
+        div = 1000.0 if ch in BIG_SCALE else 1.0   # RPM等は目盛りを1000で割って1桁表示
         val_sz = max(13, int(min(w, h) * 0.22))
         c.create_text(x + w / 2, y + self._lab_h + val_sz * 0.6, text=self._vstr(v, fmt),
                       fill=col if v is not None else UNIT_FG, font=(self.mono, val_sz, "bold"))
+        if ch in BIG_SCALE:                        # 目盛りが×1000表記であることを明示
+            c.create_text(x + 8, y + self._lab_h + 1, text="×1000", anchor="nw",
+                          fill=UNIT_FG, font=(self.jp, max(7, int(min(w, h) * 0.08))))
 
         def frac(val):
             return 0.0 if hi <= lo else min(1.0, max(0.0, (val - lo) / (hi - lo)))
@@ -342,7 +391,7 @@ class DashboardWindow(tk.Toplevel):
             for val in self._ticks(lo, hi, t):
                 yy = by1 - (by1 - by0) * frac(val)
                 c.create_line(bx1, yy, bx1 + 4, yy, fill=TICK)
-                c.create_text(bx1 + 7, yy, text=f"{val:g}", anchor="w",
+                c.create_text(bx1 + 7, yy, text=f"{val / div:g}", anchor="w",
                               fill=UNIT_FG, font=(self.jp, max(7, int(h * 0.045))))
         else:
             bx0 = x + 12
@@ -362,7 +411,7 @@ class DashboardWindow(tk.Toplevel):
             for val in self._ticks(lo, hi, t):
                 gx = bx0 + (bx1 - bx0) * frac(val)
                 c.create_line(gx, by1, gx, by1 + 4, fill=TICK)
-                c.create_text(gx, by1 + 6, text=f"{val:g}", anchor="n",
+                c.create_text(gx, by1 + 6, text=f"{val / div:g}", anchor="n",
                               fill=UNIT_FG, font=(self.jp, max(7, int(h * 0.085))))
 
     # ---- メーター(アナログ・はみ出し対策) ----
@@ -503,13 +552,55 @@ class DashboardWindow(tk.Toplevel):
             self._drag = None
             self._save_layout()
 
+    def _new_menu(self):
+        """右クリックメニューの入れ物。X11(WSLg)ではウィンドウの中に描く InlineMenu(ncec_popup.py。
+        WSLg の tk.Menu は別ウィンドウとして描かれ、表示・外側クリックでちらつき、閉じても約1秒残るため)、
+        Windows では tk.Menu。"""
+        return popup.make_menu(self, font=(self.jp, 10))
+
+    def _submenu(self, m):
+        if isinstance(m, popup.InlineMenu):
+            return popup.InlineMenu(self, font=(self.jp, 10))
+        return tk.Menu(m, tearoff=0)
+
+    def _popup(self, m, x, y):
+        """メニューを出す。InlineMenu(X11)はウィンドウの中に描くので、再描画を止める必要はない
+        (収まらないときだけ tk.Menu に切り替えて、以下の従来の出し方)。
+        tk.Menu は表示中は再描画を止めて WSLg の点滅を防ぐ
+        (_menu_win にセット → _anim が未マップ検出で自動再開)。
+
+        grab_release は付けない: X11(WSLg)では tk_popup 直後の即時解放が
+        モーダル挙動を乱すため(元の右クリックメニューと同じ素の tk_popup)。
+
+        再開判定は二重化: _anim 側の winfo_ismapped 自己回復に加え、メニューの
+        <Unmap> でも解除(どちらかが不発でも再描画が固まらない)。
+        """
+        old = getattr(self, "_ctx_menu", None)
+        if old is not None and old is not m:
+            try:
+                old.unpost()
+            except tk.TclError:
+                pass
+        if isinstance(m, popup.InlineMenu):
+            if m.post(x, y, self):
+                self._ctx_menu = m
+                return
+            m = popup.native_from(m, self)
+        self._ctx_menu = m
+        self._menu_win = m
+        m.bind("<Unmap>", self._on_menu_unmap)
+        m.tk_popup(x, y)
+
+    def _on_menu_unmap(self, _e=None):
+        self._menu_win = None
+
     def _on_right(self, e):
         t = self._tile_at(e.x, e.y)
         if not t:
             return
         lbl = PID_LABEL.get(t["ch"], (str(t["ch"]),))[0]
-        m = tk.Menu(self, tearoff=0)
-        sub = tk.Menu(m, tearoff=0)
+        m = self._new_menu()
+        sub = self._submenu(m)
         for mo in MODES:
             mark = "● " if t.get("mode", "num") == mo else "　"
             sub.add_command(label=mark + MODE_LABEL[mo], command=lambda t=t, mo=mo: self._set_mode(t, mo))
@@ -522,7 +613,7 @@ class DashboardWindow(tk.Toplevel):
         m.add_command(label=("更新: なめらか ✓" if cur_smooth else "更新: なめらかにする"),
                       command=lambda t=t: self._toggle_smooth(t))
         if self._set_interval is not None:
-            sub2 = tk.Menu(m, tearoff=0)
+            sub2 = self._submenu(m)
             cur = None
             if self._get_interval:
                 try:
@@ -530,7 +621,8 @@ class DashboardWindow(tk.Toplevel):
                 except Exception:  # noqa: BLE001
                     cur = None
             for sec, name in INTERVAL_CHOICES:
-                mark = "● " if (cur is not None and abs((cur or 0) - sec) < 1e-6) else "　"
+                mark = "● " if (cur is not None
+                                 and abs(livelog.snap_interval(cur) - sec) < 1e-6) else "　"
                 sub2.add_command(label=mark + name, command=lambda t=t, s=sec: self._set_iv(t, s))
             m.add_cascade(label="更新周期", menu=sub2)
         m.add_command(label="表示色…", command=lambda t=t: self._set_color(t))
@@ -540,7 +632,7 @@ class DashboardWindow(tk.Toplevel):
         m.add_command(label="アラーム値を設定…", command=lambda t=t: self._set_alarm(t))
         m.add_separator()
         m.add_command(label=f"「{lbl}」を削除", command=lambda t=t: self._remove(t))
-        m.tk_popup(e.x_root, e.y_root)
+        self._popup(m, e.x_root, e.y_root)
 
     def _set_mode(self, t, mode):
         t["mode"] = mode
@@ -610,7 +702,7 @@ class DashboardWindow(tk.Toplevel):
 
     def _add_menu(self):
         shown = {t["ch"] for t in self.tiles}
-        m = tk.Menu(self, tearoff=0)
+        m = self._new_menu()
         added = False
         for ch, (label, _u, _f) in PID_LABEL.items():
             if ch in shown:
@@ -619,10 +711,7 @@ class DashboardWindow(tk.Toplevel):
             added = True
         if not added:
             m.add_command(label="(追加できる項目はありません)", state="disabled")
-        try:
-            m.tk_popup(self.winfo_pointerx(), self.winfo_pointery())
-        finally:
-            m.grab_release()
+        self._popup(m, self.winfo_pointerx(), self.winfo_pointery())
 
     def _add(self, ch):
         self.tiles.append(self._norm({"ch": ch, "x": 20, "y": 20, "w": 170, "h": 110}))
@@ -635,6 +724,10 @@ class DashboardWindow(tk.Toplevel):
             except Exception:  # noqa: BLE001
                 pass
         self._save_layout()
+        try:
+            self._geo.save_now()
+        except Exception:  # noqa: BLE001
+            pass
         self.destroy()
 
 
